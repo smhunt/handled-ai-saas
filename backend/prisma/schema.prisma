@@ -1,0 +1,675 @@
+// Handled - Complete Database Schema
+// PostgreSQL with Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CORE ENTITIES
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          UserRole  @default(OWNER)
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  businesses    BusinessUser[]
+  sessions      Session[]
+  
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([userId])
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+// ============================================================================
+// BUSINESS & CONFIGURATION
+// ============================================================================
+
+model Business {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  industry        Industry
+  description     String?
+  website         String?
+  phone           String?
+  email           String?
+  timezone        String   @default("America/Toronto")
+  currency        String   @default("CAD")
+  
+  // Branding
+  logoUrl         String?
+  primaryColor    String   @default("#f97316")
+  
+  // Widget settings
+  widgetPosition  WidgetPosition @default(BOTTOM_RIGHT)
+  widgetGreeting  String   @default("Hi! How can I help you today?")
+  widgetOfflineMessage String @default("We're currently offline. Leave a message and we'll get back to you!")
+  
+  // AI Settings
+  aiPersonality   String   @default("friendly and professional")
+  aiInstructions  String?  @db.Text
+  
+  // Subscription
+  plan            Plan     @default(TRIAL)
+  planExpiresAt   DateTime?
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  users           BusinessUser[]
+  locations       Location[]
+  services        Service[]
+  menuCategories  MenuCategory[]
+  menuItems       MenuItem[]
+  bookings        Booking[]
+  orders          Order[]
+  conversations   Conversation[]
+  availabilityRules AvailabilityRule[]
+  faqItems        FAQItem[]
+  notifications   NotificationSetting[]
+  integrations    Integration[]
+  analytics       AnalyticsEvent[]
+  
+  @@index([slug])
+}
+
+model BusinessUser {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  role       UserRole @default(STAFF)
+  createdAt  DateTime @default(now())
+  
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, businessId])
+}
+
+enum Industry {
+  RESTAURANT
+  SALON
+  SPA
+  AUTO_SERVICE
+  HEALTHCARE
+  DENTAL
+  FITNESS
+  YOGA
+  PROFESSIONAL_SERVICES
+  HOME_SERVICES
+  PET_SERVICES
+  OTHER
+}
+
+enum Plan {
+  TRIAL
+  STARTER
+  PROFESSIONAL
+  BUSINESS
+  ENTERPRISE
+}
+
+enum WidgetPosition {
+  BOTTOM_RIGHT
+  BOTTOM_LEFT
+  TOP_RIGHT
+  TOP_LEFT
+}
+
+// ============================================================================
+// LOCATIONS (Multi-location support)
+// ============================================================================
+
+model Location {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  address     String
+  city        String
+  state       String?
+  postalCode  String?
+  country     String   @default("CA")
+  phone       String?
+  email       String?
+  isDefault   Boolean  @default(false)
+  latitude    Float?
+  longitude   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  bookings    Booking[]
+  orders      Order[]
+  resources   Resource[]
+  
+  @@index([businessId])
+}
+
+// ============================================================================
+// SERVICES & MENU (What the business offers)
+// ============================================================================
+
+model Service {
+  id           String   @id @default(cuid())
+  businessId   String
+  name         String
+  description  String?
+  duration     Int      // Duration in minutes
+  price        Float?
+  currency     String   @default("CAD")
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  bookings     Booking[]
+  
+  @@index([businessId])
+}
+
+model MenuCategory {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  items       MenuItem[]
+  
+  @@index([businessId])
+}
+
+model MenuItem {
+  id           String   @id @default(cuid())
+  businessId   String
+  categoryId   String?
+  name         String
+  description  String?
+  price        Float
+  currency     String   @default("CAD")
+  imageUrl     String?
+  isAvailable  Boolean  @default(true)
+  isPopular    Boolean  @default(false)
+  calories     Int?
+  allergens    String[] // Array of allergen tags
+  modifiers    Json?    // Available modifiers/options as JSON
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category     MenuCategory? @relation(fields: [categoryId], references: [id])
+  orderItems   OrderItem[]
+  
+  @@index([businessId])
+  @@index([categoryId])
+}
+
+// ============================================================================
+// RESOURCES (Tables, chairs, staff, rooms, bays, etc.)
+// ============================================================================
+
+model Resource {
+  id          String       @id @default(cuid())
+  locationId  String
+  name        String
+  type        ResourceType
+  capacity    Int          @default(1)
+  isActive    Boolean      @default(true)
+  metadata    Json?        // Extra data like table number, staff skills, etc.
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  location    Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  bookings    Booking[]
+  
+  @@index([locationId])
+}
+
+enum ResourceType {
+  TABLE
+  ROOM
+  CHAIR
+  STAFF
+  BAY
+  EQUIPMENT
+  OTHER
+}
+
+// ============================================================================
+// AVAILABILITY
+// ============================================================================
+
+model AvailabilityRule {
+  id          String   @id @default(cuid())
+  businessId  String
+  dayOfWeek   Int?     // 0-6 (Sunday-Saturday), null for specific dates
+  specificDate DateTime? // For holidays or special hours
+  startTime   String   // HH:MM format
+  endTime     String   // HH:MM format
+  isOpen      Boolean  @default(true)
+  maxBookings Int?     // Max concurrent bookings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  @@index([businessId])
+  @@index([dayOfWeek])
+  @@index([specificDate])
+}
+
+// ============================================================================
+// BOOKINGS / RESERVATIONS
+// ============================================================================
+
+model Booking {
+  id              String        @id @default(cuid())
+  businessId      String
+  locationId      String?
+  serviceId       String?
+  resourceId      String?
+  conversationId  String?
+  
+  // Customer info
+  customerName    String
+  customerEmail   String?
+  customerPhone   String?
+  
+  // Booking details
+  startTime       DateTime
+  endTime         DateTime
+  partySize       Int           @default(1)
+  status          BookingStatus @default(PENDING)
+  notes           String?
+  specialRequests String?
+  
+  // Confirmation
+  confirmationCode String       @unique
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  cancellationReason String?
+  
+  // Reminders
+  reminderSent    Boolean       @default(false)
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  business        Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location        Location?     @relation(fields: [locationId], references: [id])
+  service         Service?      @relation(fields: [serviceId], references: [id])
+  resource        Resource?     @relation(fields: [resourceId], references: [id])
+  conversation    Conversation? @relation(fields: [conversationId], references: [id])
+  
+  @@index([businessId])
+  @@index([locationId])
+  @@index([startTime])
+  @@index([status])
+  @@index([confirmationCode])
+  @@index([customerEmail])
+  @@index([customerPhone])
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+// ============================================================================
+// ORDERS (Takeout, Delivery, etc.)
+// ============================================================================
+
+model Order {
+  id              String      @id @default(cuid())
+  businessId      String
+  locationId      String?
+  conversationId  String?
+  
+  // Customer info
+  customerName    String
+  customerEmail   String?
+  customerPhone   String?
+  
+  // Order details
+  orderNumber     String      @unique
+  type            OrderType   @default(PICKUP)
+  status          OrderStatus @default(PENDING)
+  
+  // Pricing
+  subtotal        Float
+  tax             Float       @default(0)
+  tip             Float       @default(0)
+  total           Float
+  currency        String      @default("CAD")
+  
+  // Timing
+  requestedTime   DateTime?   // When customer wants it ready
+  estimatedReady  DateTime?
+  completedAt     DateTime?
+  
+  // Delivery info (if applicable)
+  deliveryAddress String?
+  deliveryNotes   String?
+  
+  // Special instructions
+  notes           String?
+  
+  // Payment
+  paymentStatus   PaymentStatus @default(UNPAID)
+  paymentMethod   String?
+  stripePaymentId String?
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  business        Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location        Location?   @relation(fields: [locationId], references: [id])
+  conversation    Conversation? @relation(fields: [conversationId], references: [id])
+  items           OrderItem[]
+  
+  @@index([businessId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([customerPhone])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  menuItemId  String?
+  name        String   // Denormalized for history
+  quantity    Int      @default(1)
+  unitPrice   Float
+  totalPrice  Float
+  modifiers   Json?    // Selected modifiers
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem    MenuItem? @relation(fields: [menuItemId], references: [id])
+  
+  @@index([orderId])
+}
+
+enum OrderType {
+  PICKUP
+  DELIVERY
+  DINE_IN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+// ============================================================================
+// CONVERSATIONS & MESSAGES
+// ============================================================================
+
+model Conversation {
+  id            String            @id @default(cuid())
+  businessId    String
+  channel       ConversationChannel @default(WEB)
+  status        ConversationStatus @default(ACTIVE)
+  
+  // Customer identification
+  visitorId     String            // Anonymous visitor ID
+  customerName  String?
+  customerEmail String?
+  customerPhone String?
+  
+  // Session info
+  userAgent     String?
+  ipAddress     String?
+  referrer      String?
+  pageUrl       String?
+  
+  // AI handling
+  handedOffToHuman Boolean        @default(false)
+  handoffReason    String?
+  assignedTo       String?        // User ID if handed off
+  
+  // Metadata
+  tags          String[]
+  metadata      Json?
+  
+  startedAt     DateTime          @default(now())
+  lastMessageAt DateTime          @default(now())
+  endedAt       DateTime?
+  
+  business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  messages      Message[]
+  bookings      Booking[]
+  orders        Order[]
+  
+  @@index([businessId])
+  @@index([visitorId])
+  @@index([status])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String        @db.Text
+  
+  // AI-specific
+  tokensUsed     Int?
+  modelUsed      String?
+  
+  // For tool calls / structured data
+  metadata       Json?
+  
+  createdAt      DateTime      @default(now())
+
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+enum ConversationChannel {
+  WEB
+  SMS
+  WHATSAPP
+  FACEBOOK
+  INSTAGRAM
+}
+
+enum ConversationStatus {
+  ACTIVE
+  WAITING
+  HANDED_OFF
+  RESOLVED
+  ABANDONED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+// ============================================================================
+// FAQS & KNOWLEDGE BASE
+// ============================================================================
+
+model FAQItem {
+  id          String   @id @default(cuid())
+  businessId  String
+  question    String
+  answer      String   @db.Text
+  category    String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  @@index([businessId])
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model NotificationSetting {
+  id            String             @id @default(cuid())
+  businessId    String
+  type          NotificationType
+  channel       NotificationChannel
+  enabled       Boolean            @default(true)
+  recipient     String             // Email or phone number
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  @@index([businessId])
+}
+
+enum NotificationType {
+  NEW_BOOKING
+  BOOKING_CANCELLED
+  NEW_ORDER
+  ORDER_UPDATED
+  NEW_CONVERSATION
+  HANDOFF_REQUEST
+  DAILY_SUMMARY
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WEBHOOK
+}
+
+// ============================================================================
+// INTEGRATIONS
+// ============================================================================
+
+model Integration {
+  id           String          @id @default(cuid())
+  businessId   String
+  type         IntegrationType
+  isActive     Boolean         @default(true)
+  credentials  Json            // Encrypted credentials
+  settings     Json?           // Integration-specific settings
+  lastSyncAt   DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  @@unique([businessId, type])
+}
+
+enum IntegrationType {
+  GOOGLE_CALENDAR
+  OUTLOOK_CALENDAR
+  SQUARE
+  TOAST
+  CLOVER
+  STRIPE
+  TWILIO
+  MAILCHIMP
+  ZAPIER
+  WEBHOOK
+}
+
+// ============================================================================
+// ANALYTICS
+// ============================================================================
+
+model AnalyticsEvent {
+  id          String   @id @default(cuid())
+  businessId  String
+  eventType   String
+  eventData   Json?
+  visitorId   String?
+  sessionId   String?
+  createdAt   DateTime @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  @@index([businessId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// API KEYS (For widget embedding)
+// ============================================================================
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  name        String
+  businessId  String
+  permissions String[]
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  
+  @@index([key])
+  @@index([businessId])
+}
