@@ -6,7 +6,7 @@ import {
   Settings, Users, BarChart3, Menu as MenuIcon, X, LogOut, Bell,
   Plus, Search, Filter, MoreVertical, Check, Clock,
   ChevronDown, Zap, Building2, CreditCard, Globe,
-  Briefcase, UtensilsCrossed, HelpCircle, MapPin, Trash2, Pencil, Copy, Key
+  Briefcase, UtensilsCrossed, HelpCircle, MapPin, Trash2, Pencil, Copy, Key, Shield
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -343,6 +343,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     { icon: ShoppingBag, label: 'Orders', path: '/orders' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: Settings, label: 'Settings', path: '/settings' },
+    { icon: Shield, label: 'Admin', path: '/admin' },
   ]
 
   return (
@@ -1800,16 +1801,162 @@ function SettingsPage() {
 }
 
 // ============================================
+// ADMIN PAGE (Super Admin Only)
+// ============================================
+
+function AdminPage() {
+  const { user } = useAuth()
+
+  // Admin stats
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['admin-stats'],
+    queryFn: () => api('/api/admin/stats')
+  })
+
+  // Users list
+  const { data: usersData, isLoading: usersLoading } = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: () => api('/api/admin/users?limit=20')
+  })
+
+  // Businesses list
+  const { data: businessesData, isLoading: businessesLoading } = useQuery({
+    queryKey: ['admin-businesses'],
+    queryFn: () => api('/api/admin/businesses?limit=20')
+  })
+
+  const stats = statsData?.stats
+  const users = usersData?.users || []
+  const businesses = businessesData?.businesses || []
+
+  if (statsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-stone-900">Super Admin Dashboard</h1>
+        <p className="text-stone-600">Manage your SaaS platform</p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm text-stone-500">Total Users</div>
+            <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
+            <div className="text-xs text-green-600">+{stats?.recentUsers || 0} this week</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm text-stone-500">Total Businesses</div>
+            <div className="text-2xl font-bold">{stats?.totalBusinesses || 0}</div>
+            <div className="text-xs text-green-600">+{stats?.recentBusinesses || 0} this week</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm text-stone-500">Total Conversations</div>
+            <div className="text-2xl font-bold">{stats?.totalConversations || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm text-stone-500">Total Bookings</div>
+            <div className="text-2xl font-bold">{stats?.totalBookings || 0}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Plan Breakdown */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Businesses by Plan</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4 flex-wrap">
+            {stats?.businessesByPlan?.map((item: any) => (
+              <div key={item.plan} className="flex items-center gap-2">
+                <Badge variant={item.plan === 'TRIAL' ? 'secondary' : 'default'}>
+                  {item.plan}
+                </Badge>
+                <span className="font-bold">{item._count}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Recent Users */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Users</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {users.slice(0, 10).map((user: any) => (
+                <div key={user.id} className="flex items-center justify-between p-2 border rounded">
+                  <div>
+                    <div className="font-medium">{user.name || 'No name'}</div>
+                    <div className="text-sm text-stone-500">{user.email}</div>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant="secondary">{user._count?.businesses || 0} businesses</Badge>
+                    <div className="text-xs text-stone-400">{new Date(user.createdAt).toLocaleDateString()}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Businesses */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Businesses</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {businesses.slice(0, 10).map((biz: any) => (
+                <div key={biz.id} className="flex items-center justify-between p-2 border rounded">
+                  <div>
+                    <div className="font-medium">{biz.name}</div>
+                    <div className="text-sm text-stone-500">{biz.industry}</div>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant={biz.plan === 'TRIAL' ? 'secondary' : 'default'}>{biz.plan}</Badge>
+                    <div className="text-xs text-stone-400">
+                      {biz._count?.conversations || 0} convos • {biz._count?.bookings || 0} bookings
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
 // PROTECTED ROUTE
 // ============================================
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
-  
+
   return <DashboardLayout>{children}</DashboardLayout>
 }
 
@@ -1830,6 +1977,7 @@ function AppRoutes() {
       <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
     </Routes>
   )
 }

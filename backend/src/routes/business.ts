@@ -265,7 +265,7 @@ router.post('/:id/services', async (req, res) => {
       }
     });
 
-    res.status(201).json(service);
+    res.status(201).json({ service });
   } catch (error) {
     console.error('Add service error:', error);
     res.status(500).json({ error: 'Failed to add service' });
@@ -290,7 +290,7 @@ router.patch('/:id/services/:serviceId', async (req, res) => {
       }
     });
 
-    res.json(service);
+    res.json({ service });
   } catch (error) {
     console.error('Update service error:', error);
     res.status(500).json({ error: 'Failed to update service' });
@@ -347,7 +347,7 @@ router.post('/:id/menu/categories', async (req, res) => {
       }
     });
 
-    res.status(201).json(category);
+    res.status(201).json({ category });
   } catch (error) {
     console.error('Add category error:', error);
     res.status(500).json({ error: 'Failed to add category' });
@@ -370,7 +370,7 @@ router.patch('/:id/menu/categories/:categoryId', async (req, res) => {
       }
     });
 
-    res.json(category);
+    res.json({ category });
   } catch (error) {
     console.error('Update category error:', error);
     res.status(500).json({ error: 'Failed to update category' });
@@ -412,7 +412,7 @@ router.post('/:id/menu/items', async (req, res) => {
       }
     });
 
-    res.status(201).json(item);
+    res.status(201).json({ item });
   } catch (error) {
     console.error('Add menu item error:', error);
     res.status(500).json({ error: 'Failed to add menu item' });
@@ -442,7 +442,7 @@ router.patch('/:id/menu/items/:itemId', async (req, res) => {
       }
     });
 
-    res.json(item);
+    res.json({ item });
   } catch (error) {
     console.error('Update menu item error:', error);
     res.status(500).json({ error: 'Failed to update menu item' });
@@ -525,7 +525,7 @@ router.get('/:id/faqs', async (req, res) => {
       where: { businessId: id },
       orderBy: { sortOrder: 'asc' }
     });
-    res.json(faqs);
+    res.json({ faqs });
   } catch (error) {
     console.error('Get FAQs error:', error);
     res.status(500).json({ error: 'Failed to fetch FAQs' });
@@ -549,7 +549,7 @@ router.post('/:id/faqs', async (req, res) => {
       }
     });
 
-    res.status(201).json(faq);
+    res.status(201).json({ faq });
   } catch (error) {
     console.error('Add FAQ error:', error);
     res.status(500).json({ error: 'Failed to add FAQ' });
@@ -573,7 +573,7 @@ router.patch('/:id/faqs/:faqId', async (req, res) => {
       }
     });
 
-    res.json(faq);
+    res.json({ faq });
   } catch (error) {
     console.error('Update FAQ error:', error);
     res.status(500).json({ error: 'Failed to update FAQ' });
@@ -835,7 +835,7 @@ router.get('/:id/locations', async (req, res) => {
         }
       }
     });
-    res.json(locations);
+    res.json({ locations });
   } catch (error) {
     console.error('Get locations error:', error);
     res.status(500).json({ error: 'Failed to fetch locations' });
@@ -873,7 +873,7 @@ router.post('/:id/locations', async (req, res) => {
       }
     });
 
-    res.status(201).json(location);
+    res.status(201).json({ location });
   } catch (error) {
     console.error('Add location error:', error);
     res.status(500).json({ error: 'Failed to add location' });
@@ -911,7 +911,7 @@ router.patch('/:id/locations/:locationId', async (req, res) => {
       }
     });
 
-    res.json(location);
+    res.json({ location });
   } catch (error) {
     console.error('Update location error:', error);
     res.status(500).json({ error: 'Failed to update location' });

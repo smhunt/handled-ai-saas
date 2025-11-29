@@ -15,6 +15,7 @@ import { conversationRouter } from './routes/conversations';
 import { widgetRouter } from './routes/widget';
 import { webhookRouter } from './routes/webhooks';
 import { analyticsRouter } from './routes/analytics';
+import { adminRouter } from './routes/admin';
 import { errorHandler } from './middleware/errorHandler';
 import { setupSocketHandlers } from './services/socket';
 
@@ -84,6 +85,7 @@ app.use('/api/bookings', bookingRouter);
 app.use('/api/orders', orderRouter);
 app.use('/api/conversations', conversationRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/admin', adminRouter);
 
 // Widget API (public, with API key auth)
 app.use('/widget', widgetLimiter, widgetRouter);
