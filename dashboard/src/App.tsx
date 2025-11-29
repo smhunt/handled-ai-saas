@@ -1087,6 +1087,60 @@ function SettingsPage() {
   const [inviteRole, setInviteRole] = useState('STAFF')
   const [newApiKeyName, setNewApiKeyName] = useState('')
 
+  // Business info form state
+  const [businessInfo, setBusinessInfo] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    website: '',
+    description: ''
+  })
+
+  // Widget settings form state
+  const [widgetSettings, setWidgetSettings] = useState({
+    widgetGreeting: '',
+    primaryColor: '#f97316'
+  })
+
+  // AI settings form state
+  const [aiSettings, setAiSettings] = useState({
+    aiPersonality: 'friendly',
+    aiInstructions: '',
+    autoHandoff: true
+  })
+
+  // Initialize form states when business data loads
+  useEffect(() => {
+    if (business) {
+      setBusinessInfo({
+        name: business.name || '',
+        phone: business.phone || '',
+        email: business.email || '',
+        website: business.website || '',
+        description: business.description || ''
+      })
+      setWidgetSettings({
+        widgetGreeting: business.widgetGreeting || "Hi! How can I help you today?",
+        primaryColor: business.primaryColor || '#f97316'
+      })
+      setAiSettings({
+        aiPersonality: business.aiPersonality || 'friendly',
+        aiInstructions: business.aiInstructions || '',
+        autoHandoff: business.autoHandoff !== false
+      })
+    }
+  }, [business])
+
+  // Update business mutation
+  const updateBusinessMutation = useMutation({
+    mutationFn: (data: any) => api(`/api/businesses/${business?.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['business', business?.id] })
+      // Refresh auth context to get updated business info
+      window.location.reload()
+    }
+  })
+
   return (
     <div className="space-y-6">
       <div>
@@ -1118,28 +1172,52 @@ function SettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Business Name</Label>
-                  <Input defaultValue={business?.name} />
+                  <Input
+                    value={businessInfo.name}
+                    onChange={e => setBusinessInfo({...businessInfo, name: e.target.value})}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Phone</Label>
-                  <Input defaultValue={business?.phone} placeholder="+1 (555) 123-4567" />
+                  <Input
+                    value={businessInfo.phone}
+                    onChange={e => setBusinessInfo({...businessInfo, phone: e.target.value})}
+                    placeholder="+1 (555) 123-4567"
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <Input defaultValue={business?.email} type="email" />
+                  <Input
+                    value={businessInfo.email}
+                    onChange={e => setBusinessInfo({...businessInfo, email: e.target.value})}
+                    type="email"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Website</Label>
-                  <Input defaultValue={business?.website} placeholder="https://" />
+                  <Input
+                    value={businessInfo.website}
+                    onChange={e => setBusinessInfo({...businessInfo, website: e.target.value})}
+                    placeholder="https://"
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Description</Label>
-                <Textarea defaultValue={business?.description} placeholder="Tell customers about your business..." />
+                <Textarea
+                  value={businessInfo.description}
+                  onChange={e => setBusinessInfo({...businessInfo, description: e.target.value})}
+                  placeholder="Tell customers about your business..."
+                />
               </div>
-              <Button>Save Changes</Button>
+              <Button
+                onClick={() => updateBusinessMutation.mutate(businessInfo)}
+                disabled={updateBusinessMutation.isPending}
+              >
+                {updateBusinessMutation.isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1632,16 +1710,28 @@ function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Greeting Message</Label>
-                <Textarea defaultValue={business?.widgetGreeting || "Hi! How can I help you today?"} />
+                <Textarea
+                  value={widgetSettings.widgetGreeting}
+                  onChange={e => setWidgetSettings({...widgetSettings, widgetGreeting: e.target.value})}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Primary Color</Label>
                 <div className="flex gap-2">
-                  <Input defaultValue={business?.primaryColor || "#f97316"} className="w-32" />
-                  <div className="w-10 h-10 rounded-lg" style={{ background: business?.primaryColor || "#f97316" }} />
+                  <Input
+                    value={widgetSettings.primaryColor}
+                    onChange={e => setWidgetSettings({...widgetSettings, primaryColor: e.target.value})}
+                    className="w-32"
+                  />
+                  <div className="w-10 h-10 rounded-lg" style={{ background: widgetSettings.primaryColor }} />
                 </div>
               </div>
-              <Button>Save Widget Settings</Button>
+              <Button
+                onClick={() => updateBusinessMutation.mutate(widgetSettings)}
+                disabled={updateBusinessMutation.isPending}
+              >
+                {updateBusinessMutation.isPending ? 'Saving...' : 'Save Widget Settings'}
+              </Button>
             </CardContent>
           </Card>
 
@@ -1732,7 +1822,10 @@ function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>AI Personality</Label>
-                <Select defaultValue="friendly">
+                <Select
+                  value={aiSettings.aiPersonality}
+                  onValueChange={value => setAiSettings({...aiSettings, aiPersonality: value})}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="friendly">Friendly & Casual</SelectItem>
@@ -1745,7 +1838,8 @@ function SettingsPage() {
                 <Label>Custom Instructions</Label>
                 <Textarea
                   placeholder="Add any special instructions for the AI..."
-                  defaultValue={business?.aiInstructions}
+                  value={aiSettings.aiInstructions}
+                  onChange={e => setAiSettings({...aiSettings, aiInstructions: e.target.value})}
                   rows={4}
                 />
                 <p className="text-sm text-stone-500">Example: "Always recommend the daily special" or "We don't take reservations for parties over 10"</p>
@@ -1755,9 +1849,17 @@ function SettingsPage() {
                   <Label>Auto-handoff for complex queries</Label>
                   <p className="text-sm text-stone-500">Automatically transfer to human when AI is uncertain</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch
+                  checked={aiSettings.autoHandoff}
+                  onCheckedChange={checked => setAiSettings({...aiSettings, autoHandoff: checked})}
+                />
               </div>
-              <Button>Save AI Settings</Button>
+              <Button
+                onClick={() => updateBusinessMutation.mutate(aiSettings)}
+                disabled={updateBusinessMutation.isPending}
+              >
+                {updateBusinessMutation.isPending ? 'Saving...' : 'Save AI Settings'}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

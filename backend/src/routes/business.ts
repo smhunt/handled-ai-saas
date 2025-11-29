@@ -221,7 +221,7 @@ router.patch('/:id', async (req, res) => {
       data: req.body
     });
 
-    res.json(business);
+    res.json({ business });
   } catch (error) {
     console.error('Update business error:', error);
     res.status(500).json({ error: 'Failed to update business' });
