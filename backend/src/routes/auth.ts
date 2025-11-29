@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+import { nanoid } from 'nanoid';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -45,8 +46,9 @@ router.post('/signup', async (req, res) => {
       }
     });
 
-    // Generate token
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    // Generate token with unique jti to avoid duplicate tokens
+    const sessionId = nanoid();
+    const token = jwt.sign({ userId: user.id, jti: sessionId }, JWT_SECRET, { expiresIn: '7d' });
 
     // Create session
     await prisma.session.create({
@@ -91,8 +93,9 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Generate token
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    // Generate token with unique jti to avoid duplicate tokens
+    const sessionId = nanoid();
+    const token = jwt.sign({ userId: user.id, jti: sessionId }, JWT_SECRET, { expiresIn: '7d' });
 
     // Create session
     await prisma.session.create({
