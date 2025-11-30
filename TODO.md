@@ -101,6 +101,11 @@
 - [x] Webhook notifications
 - [x] CSV export for Bookings, Orders, Conversations
 - [x] Dark mode toggle with localStorage persistence
+- [x] In-app notifications (WebSocket + dashboard bell)
+- [x] Real-time updates via WebSocket
+- [x] Bulk operations (Bookings, Orders, Conversations)
+- [x] Newsletter signup
+- [x] Admin panel enhancements (dark mode, icons, search)
 
 ---
 Last Updated: 2025-11-30
