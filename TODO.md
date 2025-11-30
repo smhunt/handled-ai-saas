@@ -60,7 +60,7 @@
 ## Priority: Low (Nice to Have)
 
 ### Dashboard Improvements
-- [ ] Dark mode toggle
+- [x] Dark mode toggle (with localStorage persistence)
 - [ ] Real-time updates via WebSocket
 - [x] Export data to CSV (Bookings, Orders, Conversations)
 - [ ] Bulk operations
@@ -100,6 +100,7 @@
 - [x] SMS notifications (Twilio)
 - [x] Webhook notifications
 - [x] CSV export for Bookings, Orders, Conversations
+- [x] Dark mode toggle with localStorage persistence
 
 ---
 Last Updated: 2025-11-30
