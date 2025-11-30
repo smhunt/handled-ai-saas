@@ -14,8 +14,15 @@
   // Prevent multiple initializations
   if (window.Handled && window.Handled.initialized) return;
 
-  const HANDLED_API_URL = 'https://api.handled.ai';
+  // API URL - can be overridden via data-api-url attribute or config
+  let HANDLED_API_URL = 'https://api.handled.ai';
   const HANDLED_WS_URL = 'wss://api.handled.ai';
+
+  // Check for custom API URL from script tag
+  const currentScript = document.currentScript || document.querySelector('script[data-api-key]');
+  if (currentScript && currentScript.getAttribute('data-api-url')) {
+    HANDLED_API_URL = currentScript.getAttribute('data-api-url');
+  }
 
   // Default configuration
   const defaultConfig = {
@@ -48,6 +55,11 @@
   function init(userConfig = {}) {
     // Merge configs
     config = { ...defaultConfig, ...userConfig };
+
+    // Override API URL if provided in config
+    if (userConfig.apiUrl) {
+      HANDLED_API_URL = userConfig.apiUrl;
+    }
 
     // Get API key from script tag if not provided
     if (!config.apiKey) {
