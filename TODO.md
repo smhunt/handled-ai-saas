@@ -44,17 +44,18 @@
 ### Stripe Integration
 - [x] Complete subscription checkout flow
 - [x] Webhook handling for subscription events
-- [ ] Usage metering and limits
+- [x] Usage metering and limits (middleware + dashboard display)
 
 ### Widget
-- [ ] Complete embed.js script
-- [ ] Chat functionality with AI
-- [ ] Booking/ordering integration
+- [x] Complete embed.js script (with configurable API URL)
+- [x] Chat functionality with AI (Claude-powered)
+- [x] Booking/ordering integration (AI tool calling)
 
 ### Notifications
-- [ ] Email notification service (nodemailer setup)
-- [ ] SMS notifications (Twilio integration)
-- [ ] In-app notifications
+- [x] Email notification service (nodemailer setup)
+- [x] SMS notifications (Twilio integration)
+- [x] Webhook notifications
+- [ ] In-app notifications (requires WebSocket)
 
 ## Priority: Low (Nice to Have)
 
@@ -91,6 +92,13 @@
 - [x] Stripe billing integration (routes, frontend buttons, webhooks)
 - [x] All 33 API tests passing
 - [x] Dashboard search/filter on Conversations, Bookings, Analytics pages
+- [x] Orders page search/filter
+- [x] Usage metering middleware + dashboard display
+- [x] Widget embed.js script (configurable API URL)
+- [x] AI chat with Claude tool calling
+- [x] Email notifications (nodemailer)
+- [x] SMS notifications (Twilio)
+- [x] Webhook notifications
 
 ---
 Last Updated: 2025-11-30

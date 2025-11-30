@@ -1171,6 +1171,13 @@ function SettingsPage() {
     enabled: !!business?.id
   })
 
+  // Usage data
+  const { data: usageData } = useQuery({
+    queryKey: ['usage', business?.id],
+    queryFn: () => api(`/api/billing/${business?.id}/usage`),
+    enabled: !!business?.id
+  })
+
   const services = servicesData?.services || []
   const menuCategories = menuData?.categories || []
   const menuItems = menuData?.items || []
@@ -2135,17 +2142,47 @@ function SettingsPage() {
                 </div>
                 <Badge className="bg-green-500">Active</Badge>
               </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Conversations used</span>
-                  <span>0 / {business?.plan === 'TRIAL' ? '50' :
-                           business?.plan === 'STARTER' ? '500' :
-                           business?.plan === 'PROFESSIONAL' ? '2,000' :
-                           business?.plan === 'BUSINESS' ? '10,000' : '2,000'}</span>
-                </div>
-                <div className="w-full bg-stone-200 rounded-full h-2">
-                  <div className="bg-orange-500 h-2 rounded-full" style={{ width: '0%' }} />
-                </div>
+              <div className="space-y-4">
+                {usageData?.usage && (
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Conversations this month</span>
+                        <span>{usageData.usage.conversations.used} / {usageData.usage.conversations.limit === -1 ? 'Unlimited' : usageData.usage.conversations.limit.toLocaleString()}</span>
+                      </div>
+                      <div className="w-full bg-stone-200 rounded-full h-2">
+                        <div
+                          className="bg-orange-500 h-2 rounded-full"
+                          style={{ width: usageData.usage.conversations.limit === -1 ? '0%' : `${Math.min(100, (usageData.usage.conversations.used / usageData.usage.conversations.limit) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Team members</span>
+                        <span>{usageData.usage.teamMembers.used} / {usageData.usage.teamMembers.limit === -1 ? 'Unlimited' : usageData.usage.teamMembers.limit}</span>
+                      </div>
+                      <div className="w-full bg-stone-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-500 h-2 rounded-full"
+                          style={{ width: usageData.usage.teamMembers.limit === -1 ? '0%' : `${Math.min(100, (usageData.usage.teamMembers.used / usageData.usage.teamMembers.limit) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Locations</span>
+                        <span>{usageData.usage.locations.used} / {usageData.usage.locations.limit === -1 ? 'Unlimited' : usageData.usage.locations.limit}</span>
+                      </div>
+                      <div className="w-full bg-stone-200 rounded-full h-2">
+                        <div
+                          className="bg-green-500 h-2 rounded-full"
+                          style={{ width: usageData.usage.locations.limit === -1 ? '0%' : `${Math.min(100, (usageData.usage.locations.used / usageData.usage.locations.limit) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex gap-2 mt-4">
                 <Dialog>

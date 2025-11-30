@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { authMiddleware } from '../middleware/auth';
+import { checkUsageLimit, checkBusinessActive } from '../middleware/usageLimits';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -625,7 +626,7 @@ router.get('/:id/team', async (req, res) => {
 });
 
 // Invite team member
-router.post('/:id/team/invite', async (req, res) => {
+router.post('/:id/team/invite', checkUsageLimit('teamMembers'), async (req, res) => {
   try {
     const { id } = req.params;
     const { email, role } = req.body;
@@ -847,7 +848,7 @@ router.get('/:id/locations', async (req, res) => {
 });
 
 // Create location
-router.post('/:id/locations', async (req, res) => {
+router.post('/:id/locations', checkUsageLimit('locations'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, address, city, state, postalCode, country, phone, email, isDefault, latitude, longitude } = req.body;
