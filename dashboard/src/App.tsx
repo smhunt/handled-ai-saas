@@ -6,7 +6,7 @@ import {
   Settings, Users, BarChart3, Menu as MenuIcon, X, LogOut, Bell,
   Plus, Search, Filter, MoreVertical, Check, Clock,
   ChevronDown, Zap, Building2, CreditCard, Globe,
-  Briefcase, UtensilsCrossed, HelpCircle, MapPin, Trash2, Pencil, Copy, Key, Shield
+  Briefcase, UtensilsCrossed, HelpCircle, MapPin, Trash2, Pencil, Copy, Key, Shield, Download
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -27,6 +27,25 @@ import { format } from 'date-fns'
 
 // API Configuration
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+// CSV Export Utility
+function exportToCSV(data: any[], filename: string, columns: { key: string; header: string }[]) {
+  const headers = columns.map(c => c.header).join(',')
+  const rows = data.map(item =>
+    columns.map(c => {
+      const value = c.key.split('.').reduce((obj, key) => obj?.[key], item)
+      // Escape quotes and wrap in quotes if contains comma
+      const str = String(value ?? '')
+      return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str
+    }).join(',')
+  )
+  const csv = [headers, ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`
+  link.click()
+}
 
 // Query Client
 const queryClient = new QueryClient({
@@ -580,6 +599,21 @@ function ConversationsPage() {
           <p className="text-stone-600">Manage customer chat conversations</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => exportToCSV(conversations, 'conversations', [
+              { key: 'customerName', header: 'Customer Name' },
+              { key: 'customerEmail', header: 'Email' },
+              { key: 'customerPhone', header: 'Phone' },
+              { key: 'channel', header: 'Channel' },
+              { key: 'status', header: 'Status' },
+              { key: 'lastMessageAt', header: 'Last Message' },
+              { key: 'createdAt', header: 'Started' }
+            ])}
+            disabled={conversations.length === 0}
+          >
+            <Download className="w-4 h-4 mr-2" /> Export
+          </Button>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-32">
               <SelectValue placeholder="Status" />
@@ -755,7 +789,25 @@ function BookingsPage() {
           <h1 className="text-2xl font-bold text-stone-900">Bookings</h1>
           <p className="text-stone-600">Manage reservations and appointments</p>
         </div>
-        <Button><Plus className="w-4 h-4 mr-2" /> New Booking</Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => exportToCSV(bookings, 'bookings', [
+              { key: 'customerName', header: 'Customer Name' },
+              { key: 'customerEmail', header: 'Email' },
+              { key: 'customerPhone', header: 'Phone' },
+              { key: 'startTime', header: 'Date/Time' },
+              { key: 'partySize', header: 'Party Size' },
+              { key: 'status', header: 'Status' },
+              { key: 'confirmationCode', header: 'Confirmation' },
+              { key: 'notes', header: 'Notes' }
+            ])}
+            disabled={bookings.length === 0}
+          >
+            <Download className="w-4 h-4 mr-2" /> Export CSV
+          </Button>
+          <Button><Plus className="w-4 h-4 mr-2" /> New Booking</Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -890,6 +942,21 @@ function OrdersPage() {
           <h1 className="text-2xl font-bold text-stone-900">Orders</h1>
           <p className="text-stone-600">Manage takeout and delivery orders</p>
         </div>
+        <Button
+          variant="outline"
+          onClick={() => exportToCSV(orders, 'orders', [
+            { key: 'orderNumber', header: 'Order #' },
+            { key: 'customerName', header: 'Customer Name' },
+            { key: 'customerPhone', header: 'Phone' },
+            { key: 'type', header: 'Type' },
+            { key: 'status', header: 'Status' },
+            { key: 'total', header: 'Total' },
+            { key: 'createdAt', header: 'Created' }
+          ])}
+          disabled={orders.length === 0}
+        >
+          <Download className="w-4 h-4 mr-2" /> Export CSV
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -1604,12 +1671,15 @@ function SettingsPage() {
                   <p className="text-stone-500 text-center py-4">No categories yet</p>
                 ) : (
                   <div className="space-y-2">
-                    {menuCategories.map((cat: any) => (
-                      <div key={cat.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <span>{cat.name}</span>
-                        <Badge variant="secondary">{cat._count?.items || 0} items</Badge>
-                      </div>
-                    ))}
+                    {menuCategories.map((cat: any) => {
+                      const itemCount = menuItems.filter((item: any) => item.categoryId === cat.id).length;
+                      return (
+                        <div key={cat.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <span>{cat.name}</span>
+                          <Badge variant="secondary">{itemCount} items</Badge>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
