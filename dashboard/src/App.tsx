@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
@@ -547,7 +547,9 @@ function DashboardHome() {
 function ConversationsPage() {
   const { business } = useAuth()
   const [selectedConversation, setSelectedConversation] = useState<any>(null)
-  
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('ALL')
+
   const { data: conversationsData } = useQuery({
     queryKey: ['conversations', business?.id],
     queryFn: () => api(`/api/conversations/${business?.id}`),
@@ -555,7 +557,20 @@ function ConversationsPage() {
     refetchInterval: 10000
   })
 
-  const conversations = conversationsData?.conversations || []
+  const allConversations = conversationsData?.conversations || []
+
+  // Filter conversations based on search and status
+  const conversations = allConversations.filter((conv: any) => {
+    const matchesSearch = !searchQuery ||
+      conv.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      conv.customerEmail?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      conv.customerPhone?.includes(searchQuery) ||
+      conv.messages?.some((m: any) => m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
+
+    const matchesStatus = statusFilter === 'ALL' || conv.status === statusFilter
+
+    return matchesSearch && matchesStatus
+  })
 
   return (
     <div className="space-y-6">
@@ -564,6 +579,19 @@ function ConversationsPage() {
           <h1 className="text-2xl font-bold text-stone-900">Conversations</h1>
           <p className="text-stone-600">Manage customer chat conversations</p>
         </div>
+        <div className="flex gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All</SelectItem>
+              <SelectItem value="ACTIVE">Active</SelectItem>
+              <SelectItem value="RESOLVED">Resolved</SelectItem>
+              <SelectItem value="ARCHIVED">Archived</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -571,7 +599,12 @@ function ConversationsPage() {
         <Card className="lg:col-span-1">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
-              <Input placeholder="Search..." className="flex-1" />
+              <Input
+                placeholder="Search by name, email, phone..."
+                className="flex-1"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -671,14 +704,49 @@ function ConversationsPage() {
 
 function BookingsPage() {
   const { business } = useAuth()
-  
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [dateFilter, setDateFilter] = useState<string>('ALL')
+
   const { data: bookingsData } = useQuery({
     queryKey: ['bookings', business?.id],
     queryFn: () => api(`/api/bookings/${business?.id}`),
     enabled: !!business?.id
   })
 
-  const bookings = bookingsData?.bookings || []
+  const allBookings = bookingsData?.bookings || []
+
+  // Filter bookings
+  const bookings = allBookings.filter((booking: any) => {
+    const matchesSearch = !searchQuery ||
+      booking.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      booking.customerEmail?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      booking.customerPhone?.includes(searchQuery) ||
+      booking.confirmationCode?.toLowerCase().includes(searchQuery.toLowerCase())
+
+    const matchesStatus = statusFilter === 'ALL' || booking.status === statusFilter
+
+    const bookingDate = new Date(booking.startTime)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const nextWeek = new Date(today)
+    nextWeek.setDate(nextWeek.getDate() + 7)
+
+    let matchesDate = true
+    if (dateFilter === 'TODAY') {
+      matchesDate = bookingDate >= today && bookingDate < tomorrow
+    } else if (dateFilter === 'UPCOMING') {
+      matchesDate = bookingDate >= today
+    } else if (dateFilter === 'WEEK') {
+      matchesDate = bookingDate >= today && bookingDate < nextWeek
+    } else if (dateFilter === 'PAST') {
+      matchesDate = bookingDate < today
+    }
+
+    return matchesSearch && matchesStatus && matchesDate
+  })
 
   return (
     <div className="space-y-6">
@@ -688,6 +756,39 @@ function BookingsPage() {
           <p className="text-stone-600">Manage reservations and appointments</p>
         </div>
         <Button><Plus className="w-4 h-4 mr-2" /> New Booking</Button>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Input
+          placeholder="Search by name, phone, email, confirmation..."
+          className="w-64"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Statuses</SelectItem>
+            <SelectItem value="PENDING">Pending</SelectItem>
+            <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+            <SelectItem value="CANCELLED">Cancelled</SelectItem>
+            <SelectItem value="COMPLETED">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={dateFilter} onValueChange={setDateFilter}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Date" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Dates</SelectItem>
+            <SelectItem value="TODAY">Today</SelectItem>
+            <SelectItem value="WEEK">This Week</SelectItem>
+            <SelectItem value="UPCOMING">Upcoming</SelectItem>
+            <SelectItem value="PAST">Past</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card>
@@ -759,14 +860,28 @@ function BookingsPage() {
 
 function OrdersPage() {
   const { business } = useAuth()
-  
+  const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string>('ALL')
+
   const { data: ordersData } = useQuery({
     queryKey: ['orders', business?.id],
     queryFn: () => api(`/api/orders/${business?.id}`),
     enabled: !!business?.id
   })
 
-  const orders = ordersData?.orders || []
+  const allOrders = ordersData?.orders || []
+
+  // Filter orders
+  const orders = allOrders.filter((order: any) => {
+    const matchesSearch = !searchQuery ||
+      order.orderNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.customerPhone?.includes(searchQuery)
+
+    const matchesType = typeFilter === 'ALL' || order.type === typeFilter
+
+    return matchesSearch && matchesType
+  })
 
   return (
     <div className="space-y-6">
@@ -775,6 +890,26 @@ function OrdersPage() {
           <h1 className="text-2xl font-bold text-stone-900">Orders</h1>
           <p className="text-stone-600">Manage takeout and delivery orders</p>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Input
+          placeholder="Search by order #, name, phone..."
+          className="w-64"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+        />
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Types</SelectItem>
+            <SelectItem value="PICKUP">Pickup</SelectItem>
+            <SelectItem value="DELIVERY">Delivery</SelectItem>
+            <SelectItem value="DINE_IN">Dine In</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Tabs defaultValue="active">
@@ -879,12 +1014,58 @@ function OrdersPage() {
 
 function AnalyticsPage() {
   const { business } = useAuth()
+  const [dateRange, setDateRange] = useState('7')
+
+  // Calculate date range
+  const getDateRange = () => {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(start.getDate() - parseInt(dateRange))
+    return { start, end }
+  }
+
+  const { data: analyticsData } = useQuery({
+    queryKey: ['analytics', business?.id, dateRange],
+    queryFn: () => api(`/api/analytics/${business?.id}?days=${dateRange}`),
+    enabled: !!business?.id
+  })
+
+  // Use real data if available, otherwise use mock data
+  const chartData = analyticsData?.dailyConversations || [
+    { day: 'Mon', count: 12 },
+    { day: 'Tue', count: 19 },
+    { day: 'Wed', count: 15 },
+    { day: 'Thu', count: 22 },
+    { day: 'Fri', count: 28 },
+    { day: 'Sat', count: 35 },
+    { day: 'Sun', count: 18 },
+  ]
+
+  const metrics = analyticsData?.metrics || {
+    automationRate: 94,
+    aiHandled: 847,
+    humanHandoffs: 53,
+    avgResponseTime: 1.2
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-stone-900">Analytics</h1>
-        <p className="text-stone-600">Track performance and insights</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-stone-900">Analytics</h1>
+          <p className="text-stone-600">Track performance and insights</p>
+        </div>
+        <Select value={dateRange} onValueChange={setDateRange}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Date Range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="14">Last 14 days</SelectItem>
+            <SelectItem value="30">Last 30 days</SelectItem>
+            <SelectItem value="90">Last 90 days</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -895,15 +1076,7 @@ function AnalyticsPage() {
           <CardContent>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={[
-                  { day: 'Mon', count: 12 },
-                  { day: 'Tue', count: 19 },
-                  { day: 'Wed', count: 15 },
-                  { day: 'Thu', count: 22 },
-                  { day: 'Fri', count: 28 },
-                  { day: 'Sat', count: 35 },
-                  { day: 'Sun', count: 18 },
-                ]}>
+                <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="day" />
                   <YAxis />
@@ -923,22 +1096,22 @@ function AnalyticsPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-stone-600">Automation Rate</span>
-                <span className="text-2xl font-bold text-green-600">94%</span>
+                <span className="text-2xl font-bold text-green-600">{metrics.automationRate}%</span>
               </div>
               <div className="w-full bg-stone-200 rounded-full h-2">
-                <div className="bg-green-500 h-2 rounded-full" style={{ width: '94%' }} />
+                <div className="bg-green-500 h-2 rounded-full" style={{ width: `${metrics.automationRate}%` }} />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-stone-600">Conversations Handled by AI</span>
-                <span className="font-medium">847</span>
+                <span className="font-medium">{metrics.aiHandled}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-stone-600">Human Handoffs</span>
-                <span className="font-medium">53</span>
+                <span className="font-medium">{metrics.humanHandoffs}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-stone-600">Avg Response Time</span>
-                <span className="font-medium">1.2s</span>
+                <span className="font-medium">{metrics.avgResponseTime}s</span>
               </div>
             </div>
           </CardContent>
@@ -1017,6 +1190,14 @@ function SettingsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['services', business?.id] })
   })
 
+  const updateServiceMutation = useMutation({
+    mutationFn: (data: any) => api(`/api/businesses/${business?.id}/services/${data.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['services', business?.id] })
+  })
+
   // FAQ mutations
   const createFaqMutation = useMutation({
     mutationFn: (data: any) => api(`/api/businesses/${business?.id}/faqs`, { method: 'POST', body: JSON.stringify(data) }),
@@ -1079,10 +1260,11 @@ function SettingsPage() {
 
   // Form states
   const [newService, setNewService] = useState({ name: '', description: '', duration: 30, price: 0 })
+  const [editingService, setEditingService] = useState<any>(null)
   const [newFaq, setNewFaq] = useState({ question: '', answer: '' })
   const [newCategory, setNewCategory] = useState({ name: '', description: '' })
   const [newMenuItem, setNewMenuItem] = useState({ name: '', description: '', price: 0, categoryId: '' })
-  const [newLocation, setNewLocation] = useState({ name: '', address: '', city: '', state: '', zipCode: '', phone: '' })
+  const [newLocation, setNewLocation] = useState({ name: '', address: '', city: '', state: '', postalCode: '', phone: '' })
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('STAFF')
   const [newApiKeyName, setNewApiKeyName] = useState('')
@@ -1297,7 +1479,76 @@ function SettingsPage() {
                         {service.description && <div className="text-sm text-stone-400 mt-1">{service.description}</div>}
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm"><Pencil className="w-4 h-4" /></Button>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingService({ ...service })}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Edit Service</DialogTitle>
+                              <DialogDescription>Update service details</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <Label>Service Name</Label>
+                                <Input
+                                  value={editingService?.id === service.id ? editingService.name : service.name}
+                                  onChange={e => setEditingService({ ...editingService, name: e.target.value })}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Description</Label>
+                                <Input
+                                  value={editingService?.id === service.id ? editingService.description || '' : service.description || ''}
+                                  onChange={e => setEditingService({ ...editingService, description: e.target.value })}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label>Duration (minutes)</Label>
+                                  <Input
+                                    type="number"
+                                    value={editingService?.id === service.id ? editingService.duration : service.duration}
+                                    onChange={e => setEditingService({ ...editingService, duration: parseInt(e.target.value) || 0 })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Price ($)</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={editingService?.id === service.id ? editingService.price : service.price}
+                                    onChange={e => setEditingService({ ...editingService, price: parseFloat(e.target.value) || 0 })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <DialogClose asChild>
+                                <Button variant="outline">Cancel</Button>
+                              </DialogClose>
+                              <DialogClose asChild>
+                                <Button
+                                  onClick={() => {
+                                    if (editingService) {
+                                      updateServiceMutation.mutate(editingService)
+                                      setEditingService(null)
+                                    }
+                                  }}
+                                  disabled={updateServiceMutation.isPending}
+                                >
+                                  Save Changes
+                                </Button>
+                              </DialogClose>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1644,15 +1895,15 @@ function SettingsPage() {
                 <div className="space-y-2">
                   <Label>Zip Code</Label>
                   <Input
-                    value={newLocation.zipCode}
-                    onChange={e => setNewLocation({...newLocation, zipCode: e.target.value})}
+                    value={newLocation.postalCode}
+                    onChange={e => setNewLocation({...newLocation, postalCode: e.target.value})}
                   />
                 </div>
               </div>
               <Button
                 onClick={() => {
                   createLocationMutation.mutate(newLocation)
-                  setNewLocation({ name: '', address: '', city: '', state: '', zipCode: '', phone: '' })
+                  setNewLocation({ name: '', address: '', city: '', state: '', postalCode: '', phone: '' })
                 }}
                 disabled={!newLocation.name || createLocationMutation.isPending}
               >
@@ -1679,7 +1930,7 @@ function SettingsPage() {
                             {loc.name}
                           </div>
                           <div className="text-sm text-stone-500 mt-1">
-                            {loc.address && `${loc.address}, `}{loc.city}, {loc.state} {loc.zipCode}
+                            {loc.address && `${loc.address}, `}{loc.city}, {loc.state} {loc.postalCode}
                           </div>
                           {loc.phone && <div className="text-sm text-stone-500">{loc.phone}</div>}
                         </div>
@@ -1974,6 +2225,7 @@ function SettingsPage() {
 
 function AdminPage() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
 
   // Admin stats
   const { data: statsData, isLoading: statsLoading } = useQuery({
@@ -1991,6 +2243,19 @@ function AdminPage() {
   const { data: businessesData, isLoading: businessesLoading } = useQuery({
     queryKey: ['admin-businesses'],
     queryFn: () => api('/api/admin/businesses?limit=20')
+  })
+
+  // Business update mutation
+  const updateBusinessMutation = useMutation({
+    mutationFn: (data: { id: string; plan?: string; isActive?: boolean }) =>
+      api(`/api/admin/businesses/${data.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ plan: data.plan, isActive: data.isActive })
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-businesses'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] })
+    }
   })
 
   const stats = statsData?.stats
@@ -2094,15 +2359,43 @@ function AdminPage() {
             <div className="space-y-3">
               {businesses.slice(0, 10).map((biz: any) => (
                 <div key={biz.id} className="flex items-center justify-between p-2 border rounded">
-                  <div>
-                    <div className="font-medium">{biz.name}</div>
+                  <div className="flex-1">
+                    <div className="font-medium flex items-center gap-2">
+                      {biz.name}
+                      {biz.isActive === false && <Badge variant="destructive" className="text-xs">Disabled</Badge>}
+                    </div>
                     <div className="text-sm text-stone-500">{biz.industry}</div>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant={biz.plan === 'TRIAL' ? 'secondary' : 'default'}>{biz.plan}</Badge>
                     <div className="text-xs text-stone-400">
                       {biz._count?.conversations || 0} convos • {biz._count?.bookings || 0} bookings
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={biz.plan}
+                      onValueChange={(plan) => updateBusinessMutation.mutate({ id: biz.id, plan })}
+                    >
+                      <SelectTrigger className="w-32 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TRIAL">Trial</SelectItem>
+                        <SelectItem value="STARTER">Starter</SelectItem>
+                        <SelectItem value="PROFESSIONAL">Professional</SelectItem>
+                        <SelectItem value="BUSINESS">Business</SelectItem>
+                        <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant={biz.isActive === false ? 'default' : 'outline'}
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => updateBusinessMutation.mutate({
+                        id: biz.id,
+                        isActive: biz.isActive === false ? true : false
+                      })}
+                    >
+                      {biz.isActive === false ? 'Enable' : 'Disable'}
+                    </Button>
                   </div>
                 </div>
               ))}
