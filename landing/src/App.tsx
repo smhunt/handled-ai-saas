@@ -206,33 +206,49 @@ function ChatDemo() {
 
   useEffect(() => {
     let currentIndex = 0
-    let timeoutId: ReturnType<typeof setTimeout>
-    
+    let cancelled = false
+    const timeouts: ReturnType<typeof setTimeout>[] = []
+
+    const schedule = (fn: () => void, delay: number) => {
+      const id = setTimeout(() => {
+        if (!cancelled) fn()
+      }, delay)
+      timeouts.push(id)
+    }
+
     const showNextMessage = () => {
-      if (currentIndex < conversation.length) {
-        if (conversation[currentIndex].role === 'ai') {
-          setIsTyping(true)
-          timeoutId = setTimeout(() => {
-            setIsTyping(false)
-            setMessages(prev => [...prev, conversation[currentIndex]])
-            currentIndex++
-            timeoutId = setTimeout(showNextMessage, 1500)
-          }, 1200)
-        } else {
-          setMessages(prev => [...prev, conversation[currentIndex]])
-          currentIndex++
-          timeoutId = setTimeout(showNextMessage, 1500)
+      if (cancelled || currentIndex >= conversation.length) {
+        if (!cancelled && currentIndex >= conversation.length) {
+          schedule(() => {
+            setMessages([])
+            setKey(k => k + 1)
+          }, 4000)
         }
+        return
+      }
+
+      const msg = conversation[currentIndex]
+      if (msg.role === 'ai') {
+        setIsTyping(true)
+        schedule(() => {
+          setIsTyping(false)
+          setMessages(prev => [...prev, msg])
+          currentIndex++
+          schedule(showNextMessage, 1500)
+        }, 1200)
       } else {
-        timeoutId = setTimeout(() => {
-          setMessages([])
-          setKey(k => k + 1)
-        }, 4000)
+        setMessages(prev => [...prev, msg])
+        currentIndex++
+        schedule(showNextMessage, 1500)
       }
     }
 
-    timeoutId = setTimeout(showNextMessage, 1000)
-    return () => clearTimeout(timeoutId)
+    schedule(showNextMessage, 1000)
+
+    return () => {
+      cancelled = true
+      timeouts.forEach(clearTimeout)
+    }
   }, [key])
 
   return (
@@ -250,11 +266,11 @@ function ChatDemo() {
         </div>
       </div>
       <div className="h-80 p-4 space-y-3 overflow-y-auto bg-stone-50">
-        {messages.map((msg, i) => (
+        {messages.filter(Boolean).map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${
-              msg.role === 'user' 
-                ? 'bg-stone-900 text-white rounded-br-md' 
+              msg.role === 'user'
+                ? 'bg-stone-900 text-white rounded-br-md'
                 : 'bg-white border border-stone-200 text-stone-800 rounded-bl-md shadow-sm'
             }`}>
               {msg.text}
