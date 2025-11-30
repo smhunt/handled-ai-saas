@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import { handleConversation } from '../services/conversation';
+import { checkUsageLimit, checkBusinessActive } from '../middleware/usageLimits';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -42,6 +43,7 @@ async function validateApiKey(req: any, res: any, next: any) {
 }
 
 router.use(validateApiKey);
+router.use(checkBusinessActive);
 
 // Get widget configuration
 router.get('/config', async (req, res) => {
@@ -100,7 +102,7 @@ router.get('/config', async (req, res) => {
 });
 
 // Start a new conversation
-router.post('/conversations', async (req, res) => {
+router.post('/conversations', checkUsageLimit('conversations'), async (req, res) => {
   try {
     const { visitorId, pageUrl, referrer, userAgent } = req.body;
 
