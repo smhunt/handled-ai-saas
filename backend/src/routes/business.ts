@@ -608,12 +608,12 @@ router.get('/:id/team', async (req, res) => {
         }
       }
     });
-    res.json(members.map(m => ({
+    res.json({ members: members.map(m => ({
       id: m.id,
       role: m.role,
       user: m.user,
       createdAt: m.createdAt
-    })));
+    })) });
   } catch (error) {
     console.error('Get team error:', error);
     res.status(500).json({ error: 'Failed to fetch team' });
@@ -664,7 +664,7 @@ router.post('/:id/team/invite', async (req, res) => {
       }
     });
 
-    res.status(201).json(member);
+    res.status(201).json({ member });
   } catch (error) {
     console.error('Invite team member error:', error);
     res.status(500).json({ error: 'Failed to invite team member' });
@@ -685,7 +685,7 @@ router.patch('/:id/team/:memberId', async (req, res) => {
       }
     });
 
-    res.json(member);
+    res.json({ member });
   } catch (error) {
     console.error('Update team member error:', error);
     res.status(500).json({ error: 'Failed to update team member' });
@@ -736,7 +736,7 @@ router.get('/:id/api-keys', async (req, res) => {
         createdAt: true
       }
     });
-    res.json(keys);
+    res.json({ apiKeys: keys });
   } catch (error) {
     console.error('Get API keys error:', error);
     res.status(500).json({ error: 'Failed to fetch API keys' });
@@ -760,7 +760,7 @@ router.post('/:id/api-keys', async (req, res) => {
       }
     });
 
-    res.status(201).json(apiKey);
+    res.status(201).json({ apiKey });
   } catch (error) {
     console.error('Create API key error:', error);
     res.status(500).json({ error: 'Failed to create API key' });
@@ -782,7 +782,7 @@ router.patch('/:id/api-keys/:keyId', async (req, res) => {
       }
     });
 
-    res.json(apiKey);
+    res.json({ apiKey });
   } catch (error) {
     console.error('Update API key error:', error);
     res.status(500).json({ error: 'Failed to update API key' });

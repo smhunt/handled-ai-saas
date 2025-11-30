@@ -1865,7 +1865,7 @@ function SettingsPage() {
         </TabsContent>
 
         {/* Billing Tab */}
-        <TabsContent value="billing" className="mt-6">
+        <TabsContent value="billing" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Subscription</CardTitle>
@@ -1876,7 +1876,10 @@ function SettingsPage() {
                 <div>
                   <div className="font-bold text-lg capitalize">{business?.plan || 'Trial'} Plan</div>
                   <div className="text-stone-600">
-                    {business?.plan === 'TRIAL' ? '14-day free trial' : '$99/month'}
+                    {business?.plan === 'TRIAL' ? '14-day free trial' :
+                     business?.plan === 'STARTER' ? '$49/month' :
+                     business?.plan === 'PROFESSIONAL' ? '$99/month' :
+                     business?.plan === 'BUSINESS' ? '$249/month' : '$99/month'}
                   </div>
                 </div>
                 <Badge className="bg-green-500">Active</Badge>
@@ -1884,15 +1887,78 @@ function SettingsPage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Conversations used</span>
-                  <span>0 / {business?.plan === 'TRIAL' ? '50' : '2,500'}</span>
+                  <span>0 / {business?.plan === 'TRIAL' ? '50' :
+                           business?.plan === 'STARTER' ? '500' :
+                           business?.plan === 'PROFESSIONAL' ? '2,000' :
+                           business?.plan === 'BUSINESS' ? '10,000' : '2,000'}</span>
                 </div>
                 <div className="w-full bg-stone-200 rounded-full h-2">
                   <div className="bg-orange-500 h-2 rounded-full" style={{ width: '0%' }} />
                 </div>
               </div>
               <div className="flex gap-2 mt-4">
-                <Button variant="outline">Upgrade Plan</Button>
-                <Button variant="outline">Billing History</Button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">Upgrade Plan</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                      <DialogTitle>Choose Your Plan</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid md:grid-cols-3 gap-4 mt-4">
+                      {[
+                        { name: 'STARTER', price: 49, conversations: 500, features: ['500 conversations/mo', '2 team members', '1 location', 'Email support'] },
+                        { name: 'PROFESSIONAL', price: 99, conversations: 2000, features: ['2,000 conversations/mo', '5 team members', '3 locations', 'Priority support', 'Custom AI training'] },
+                        { name: 'BUSINESS', price: 249, conversations: 10000, features: ['10,000 conversations/mo', '20 team members', '10 locations', 'Dedicated support', 'API access', 'White-label'] }
+                      ].map((plan) => (
+                        <div key={plan.name} className={`border rounded-lg p-4 ${business?.plan === plan.name ? 'border-orange-500 bg-orange-50' : ''}`}>
+                          <h3 className="font-bold text-lg">{plan.name.charAt(0) + plan.name.slice(1).toLowerCase()}</h3>
+                          <div className="text-2xl font-bold mt-2">${plan.price}<span className="text-sm font-normal">/mo</span></div>
+                          <ul className="mt-4 space-y-2 text-sm">
+                            {plan.features.map((f, i) => (
+                              <li key={i} className="flex items-center gap-2">
+                                <Check className="w-4 h-4 text-green-500" />
+                                {f}
+                              </li>
+                            ))}
+                          </ul>
+                          <Button
+                            className="w-full mt-4"
+                            variant={business?.plan === plan.name ? 'outline' : 'default'}
+                            disabled={business?.plan === plan.name}
+                            onClick={async () => {
+                              try {
+                                const res = await api(`/api/billing/${business?.id}/checkout`, {
+                                  method: 'POST',
+                                  body: JSON.stringify({ plan: plan.name })
+                                })
+                                if (res.url) window.location.href = res.url
+                              } catch (e) {
+                                console.error('Checkout error:', e)
+                              }
+                            }}
+                          >
+                            {business?.plan === plan.name ? 'Current Plan' : 'Select Plan'}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const res = await api(`/api/billing/${business?.id}/portal`, { method: 'POST' })
+                      if (res.url) window.location.href = res.url
+                    } catch (e) {
+                      console.error('Portal error:', e)
+                      alert('No billing account found. Please upgrade your plan first.')
+                    }
+                  }}
+                >
+                  Billing History
+                </Button>
               </div>
             </CardContent>
           </Card>

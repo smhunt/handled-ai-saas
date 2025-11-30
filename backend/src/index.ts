@@ -16,6 +16,7 @@ import { widgetRouter } from './routes/widget';
 import { webhookRouter } from './routes/webhooks';
 import { analyticsRouter } from './routes/analytics';
 import { adminRouter } from './routes/admin';
+import { billingRouter } from './routes/billing';
 import { errorHandler } from './middleware/errorHandler';
 import { setupSocketHandlers } from './services/socket';
 
@@ -86,6 +87,7 @@ app.use('/api/orders', orderRouter);
 app.use('/api/conversations', conversationRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/billing', billingRouter);
 
 // Widget API (public, with API key auth)
 app.use('/widget', widgetLimiter, widgetRouter);
