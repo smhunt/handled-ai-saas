@@ -457,6 +457,7 @@ export default function App() {
             </a>
             
             <div className="hidden md:flex items-center gap-8">
+              <a href="#demo" className="text-stone-600 hover:text-stone-900 transition-colors">Demo</a>
               <a href="#features" className="text-stone-600 hover:text-stone-900 transition-colors">Features</a>
               <a href="#industries" className="text-stone-600 hover:text-stone-900 transition-colors">Industries</a>
               <a href="#pricing" className="text-stone-600 hover:text-stone-900 transition-colors">Pricing</a>
@@ -483,6 +484,7 @@ export default function App() {
 
         {mobileMenuOpen && (
           <div className="md:hidden bg-white border-t border-stone-200 p-4 space-y-4">
+            <a href="#demo" className="block text-stone-600">Demo</a>
             <a href="#features" className="block text-stone-600">Features</a>
             <a href="#industries" className="block text-stone-600">Industries</a>
             <a href="#pricing" className="block text-stone-600">Pricing</a>
@@ -547,6 +549,32 @@ export default function App() {
             <StatCard value="50K+" label="Bookings made" />
             <StatCard value="99.9%" label="Uptime" />
             <StatCard value="4.9★" label="Customer rating" />
+          </div>
+        </div>
+      </section>
+
+      {/* Video Demo */}
+      <section id="demo" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-stone-50 to-white">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <Badge variant="secondary" className="mb-4">See it in action</Badge>
+            <h2 className="text-3xl sm:text-4xl font-bold text-stone-900 mb-4">
+              Watch how Handled transforms your business
+            </h2>
+            <p className="text-lg text-stone-600 max-w-2xl mx-auto">
+              From missed calls to automated bookings in minutes. See how AI handles your customers while you focus on what matters.
+            </p>
+          </div>
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-stone-200">
+            <video
+              className="w-full aspect-video"
+              controls
+              poster="/videos/demo-poster.jpg"
+              preload="metadata"
+            >
+              <source src="/videos/demo.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
           </div>
         </div>
       </section>

@@ -68,7 +68,7 @@
 ### Landing Page
 - [x] Contact form submission
 - [x] Newsletter signup
-- [ ] Demo video
+- [x] Demo video
 
 ## Completed
 
@@ -106,6 +106,7 @@
 - [x] Bulk operations (Bookings, Orders, Conversations)
 - [x] Newsletter signup
 - [x] Admin panel enhancements (dark mode, icons, search)
+- [x] Demo video on landing page
 
 ---
 Last Updated: 2025-11-30
