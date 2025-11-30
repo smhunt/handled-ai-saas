@@ -2821,6 +2821,8 @@ function SettingsPage() {
 function AdminPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const [userSearch, setUserSearch] = useState('')
+  const [bizSearch, setBizSearch] = useState('')
 
   // Admin stats
   const { data: statsData, isLoading: statsLoading } = useQuery({
@@ -2831,13 +2833,13 @@ function AdminPage() {
   // Users list
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['admin-users'],
-    queryFn: () => api('/api/admin/users?limit=20')
+    queryFn: () => api('/api/admin/users?limit=50')
   })
 
   // Businesses list
   const { data: businessesData, isLoading: businessesLoading } = useQuery({
     queryKey: ['admin-businesses'],
-    queryFn: () => api('/api/admin/businesses?limit=20')
+    queryFn: () => api('/api/admin/businesses?limit=50')
   })
 
   // Business update mutation
@@ -2854,8 +2856,22 @@ function AdminPage() {
   })
 
   const stats = statsData?.stats
-  const users = usersData?.users || []
-  const businesses = businessesData?.businesses || []
+  const allUsers = usersData?.users || []
+  const allBusinesses = businessesData?.businesses || []
+
+  // Filter users
+  const users = allUsers.filter((u: any) =>
+    !userSearch ||
+    u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.email?.toLowerCase().includes(userSearch.toLowerCase())
+  )
+
+  // Filter businesses
+  const businesses = allBusinesses.filter((b: any) =>
+    !bizSearch ||
+    b.name?.toLowerCase().includes(bizSearch.toLowerCase()) ||
+    b.industry?.toLowerCase().includes(bizSearch.toLowerCase())
+  )
 
   if (statsLoading) {
     return (
@@ -2868,36 +2884,64 @@ function AdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-stone-900">Super Admin Dashboard</h1>
-        <p className="text-stone-600">Manage your SaaS platform</p>
+        <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Super Admin Dashboard</h1>
+        <p className="text-stone-600 dark:text-stone-400">Manage your SaaS platform</p>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
-            <div className="text-sm text-stone-500">Total Users</div>
-            <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
-            <div className="text-xs text-green-600">+{stats?.recentUsers || 0} this week</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-stone-500 dark:text-stone-400">Total Users</div>
+                <div className="text-2xl font-bold dark:text-white">{stats?.totalUsers || 0}</div>
+                <div className="text-xs text-green-600">+{stats?.recentUsers || 0} this week</div>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
+                <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              </div>
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-sm text-stone-500">Total Businesses</div>
-            <div className="text-2xl font-bold">{stats?.totalBusinesses || 0}</div>
-            <div className="text-xs text-green-600">+{stats?.recentBusinesses || 0} this week</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-stone-500 dark:text-stone-400">Total Businesses</div>
+                <div className="text-2xl font-bold dark:text-white">{stats?.totalBusinesses || 0}</div>
+                <div className="text-xs text-green-600">+{stats?.recentBusinesses || 0} this week</div>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-sm text-stone-500">Total Conversations</div>
-            <div className="text-2xl font-bold">{stats?.totalConversations || 0}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-stone-500 dark:text-stone-400">Total Conversations</div>
+                <div className="text-2xl font-bold dark:text-white">{stats?.totalConversations || 0}</div>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+                <MessageSquare className="w-5 h-5 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-sm text-stone-500">Total Bookings</div>
-            <div className="text-2xl font-bold">{stats?.totalBookings || 0}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-stone-500 dark:text-stone-400">Total Bookings</div>
+                <div className="text-2xl font-bold dark:text-white">{stats?.totalBookings || 0}</div>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -2905,16 +2949,16 @@ function AdminPage() {
       {/* Plan Breakdown */}
       <Card>
         <CardHeader>
-          <CardTitle>Businesses by Plan</CardTitle>
+          <CardTitle className="dark:text-white">Businesses by Plan</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4 flex-wrap">
             {stats?.businessesByPlan?.map((item: any) => (
-              <div key={item.plan} className="flex items-center gap-2">
+              <div key={item.plan} className="flex items-center gap-2 px-3 py-2 bg-stone-50 dark:bg-stone-800 rounded-lg">
                 <Badge variant={item.plan === 'TRIAL' ? 'secondary' : 'default'}>
                   {item.plan}
                 </Badge>
-                <span className="font-bold">{item._count}</span>
+                <span className="font-bold dark:text-white">{item._count}</span>
               </div>
             ))}
           </div>
@@ -2922,79 +2966,116 @@ function AdminPage() {
       </Card>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Recent Users */}
+        {/* Users */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Users</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="dark:text-white">Users</CardTitle>
+              <Badge variant="secondary">{allUsers.length} total</Badge>
+            </div>
+            <Input
+              placeholder="Search users by name or email..."
+              value={userSearch}
+              onChange={e => setUserSearch(e.target.value)}
+              className="mt-2"
+            />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {users.slice(0, 10).map((user: any) => (
-                <div key={user.id} className="flex items-center justify-between p-2 border rounded">
-                  <div>
-                    <div className="font-medium">{user.name || 'No name'}</div>
-                    <div className="text-sm text-stone-500">{user.email}</div>
+            <ScrollArea className="h-80">
+              <div className="space-y-2">
+                {users.slice(0, 20).map((user: any) => (
+                  <div key={user.id} className="flex items-center justify-between p-3 border dark:border-stone-700 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-8 h-8">
+                        <AvatarFallback className="text-xs bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400">
+                          {user.name?.[0] || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-medium dark:text-white">{user.name || 'No name'}</div>
+                        <div className="text-sm text-stone-500 dark:text-stone-400">{user.email}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant="secondary">{user._count?.businesses || 0} biz</Badge>
+                      <div className="text-xs text-stone-400 mt-1">{new Date(user.createdAt).toLocaleDateString()}</div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <Badge variant="secondary">{user._count?.businesses || 0} businesses</Badge>
-                    <div className="text-xs text-stone-400">{new Date(user.createdAt).toLocaleDateString()}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+                {users.length === 0 && (
+                  <div className="text-center text-stone-500 py-4">No users found</div>
+                )}
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
 
-        {/* Recent Businesses */}
+        {/* Businesses */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Businesses</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="dark:text-white">Businesses</CardTitle>
+              <Badge variant="secondary">{allBusinesses.length} total</Badge>
+            </div>
+            <Input
+              placeholder="Search businesses by name or industry..."
+              value={bizSearch}
+              onChange={e => setBizSearch(e.target.value)}
+              className="mt-2"
+            />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {businesses.slice(0, 10).map((biz: any) => (
-                <div key={biz.id} className="flex items-center justify-between p-2 border rounded">
-                  <div className="flex-1">
-                    <div className="font-medium flex items-center gap-2">
-                      {biz.name}
-                      {biz.isActive === false && <Badge variant="destructive" className="text-xs">Disabled</Badge>}
+            <ScrollArea className="h-80">
+              <div className="space-y-2">
+                {businesses.slice(0, 20).map((biz: any) => (
+                  <div key={biz.id} className="p-3 border dark:border-stone-700 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium dark:text-white">{biz.name}</span>
+                        {biz.isActive === false && <Badge variant="destructive" className="text-xs">Disabled</Badge>}
+                      </div>
+                      <Badge variant="outline" className="text-xs">{biz.industry || 'N/A'}</Badge>
                     </div>
-                    <div className="text-sm text-stone-500">{biz.industry}</div>
-                    <div className="text-xs text-stone-400">
-                      {biz._count?.conversations || 0} convos • {biz._count?.bookings || 0} bookings
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-stone-500 dark:text-stone-400">
+                        {biz._count?.conversations || 0} convos • {biz._count?.bookings || 0} bookings • {biz._count?.orders || 0} orders
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={biz.plan}
+                          onValueChange={(plan) => updateBusinessMutation.mutate({ id: biz.id, plan })}
+                        >
+                          <SelectTrigger className="w-28 h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="TRIAL">Trial</SelectItem>
+                            <SelectItem value="STARTER">Starter</SelectItem>
+                            <SelectItem value="PROFESSIONAL">Pro</SelectItem>
+                            <SelectItem value="BUSINESS">Business</SelectItem>
+                            <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant={biz.isActive === false ? 'default' : 'outline'}
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => updateBusinessMutation.mutate({
+                            id: biz.id,
+                            isActive: biz.isActive === false ? true : false
+                          })}
+                        >
+                          {biz.isActive === false ? 'Enable' : 'Disable'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={biz.plan}
-                      onValueChange={(plan) => updateBusinessMutation.mutate({ id: biz.id, plan })}
-                    >
-                      <SelectTrigger className="w-32 h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="TRIAL">Trial</SelectItem>
-                        <SelectItem value="STARTER">Starter</SelectItem>
-                        <SelectItem value="PROFESSIONAL">Professional</SelectItem>
-                        <SelectItem value="BUSINESS">Business</SelectItem>
-                        <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant={biz.isActive === false ? 'default' : 'outline'}
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => updateBusinessMutation.mutate({
-                        id: biz.id,
-                        isActive: biz.isActive === false ? true : false
-                      })}
-                    >
-                      {biz.isActive === false ? 'Enable' : 'Disable'}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+                {businesses.length === 0 && (
+                  <div className="text-center text-stone-500 py-4">No businesses found</div>
+                )}
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
       </div>
