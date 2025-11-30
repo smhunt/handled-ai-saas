@@ -6,7 +6,7 @@ import {
   Settings, Users, BarChart3, Menu as MenuIcon, X, LogOut, Bell,
   Plus, Search, Filter, MoreVertical, Check, Clock,
   ChevronDown, Zap, Building2, CreditCard, Globe,
-  Briefcase, UtensilsCrossed, HelpCircle, MapPin, Trash2, Pencil, Copy, Key, Shield, Download
+  Briefcase, UtensilsCrossed, HelpCircle, MapPin, Trash2, Pencil, Copy, Key, Shield, Download, Sun, Moon
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -56,6 +56,57 @@ const queryClient = new QueryClient({
     }
   }
 })
+
+// Theme Context
+type Theme = 'light' | 'dark'
+interface ThemeContextType {
+  theme: Theme
+  toggleTheme: () => void
+}
+const ThemeContext = createContext<ThemeContextType | null>(null)
+
+function useTheme() {
+  const context = useContext(ThemeContext)
+  if (!context) throw new Error('useTheme must be used within ThemeProvider')
+  return context
+}
+
+function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('handled_theme') as Theme
+    return saved || 'light'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('handled_theme', theme)
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [theme])
+
+  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light')
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  )
+}
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme()
+  return (
+    <button
+      onClick={toggleTheme}
+      className="p-2 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
+      title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+    >
+      {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+    </button>
+  )
+}
 
 // Auth Context
 interface AuthContextType {
@@ -366,14 +417,14 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   ]
 
   return (
-    <div className="min-h-screen bg-stone-50 flex">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 flex">
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-white border-r border-stone-200 flex flex-col transition-all duration-300`}>
-        <div className="p-4 flex items-center gap-3 border-b border-stone-200">
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-white dark:bg-stone-900 border-r border-stone-200 dark:border-stone-800 flex flex-col transition-all duration-300`}>
+        <div className="p-4 flex items-center gap-3 border-b border-stone-200 dark:border-stone-800">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0">
             <Zap className="w-5 h-5 text-white" />
           </div>
-          {sidebarOpen && <span className="font-bold text-lg">Handled</span>}
+          {sidebarOpen && <span className="font-bold text-lg dark:text-white">Handled</span>}
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
@@ -382,9 +433,9 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
               key={item.path}
               to={item.path}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                location.pathname === item.path 
-                  ? 'bg-orange-50 text-orange-600' 
-                  : 'text-stone-600 hover:bg-stone-100'
+                location.pathname === item.path
+                  ? 'bg-orange-50 dark:bg-orange-900/30 text-orange-600'
+                  : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
               }`}
             >
               <item.icon className="w-5 h-5 shrink-0" />
@@ -393,17 +444,17 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-stone-200">
+        <div className="p-4 border-t border-stone-200 dark:border-stone-800">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-stone-100 transition-colors">
+              <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors">
                 <Avatar className="w-8 h-8">
                   <AvatarFallback className="bg-orange-100 text-orange-600">{user?.name?.[0] || 'U'}</AvatarFallback>
                 </Avatar>
                 {sidebarOpen && (
                   <div className="flex-1 text-left">
-                    <div className="text-sm font-medium truncate">{user?.name}</div>
-                    <div className="text-xs text-stone-500 truncate">{business?.name}</div>
+                    <div className="text-sm font-medium truncate dark:text-white">{user?.name}</div>
+                    <div className="text-xs text-stone-500 dark:text-stone-400 truncate">{business?.name}</div>
                   </div>
                 )}
               </button>
@@ -420,20 +471,21 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-screen">
         {/* Top Bar */}
-        <header className="h-16 bg-white border-b border-stone-200 flex items-center justify-between px-6">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-stone-100 rounded-lg">
-            <MenuIcon className="w-5 h-5" />
+        <header className="h-16 bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between px-6">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg">
+            <MenuIcon className="w-5 h-5 dark:text-white" />
           </button>
-          <div className="flex items-center gap-4">
-            <button className="p-2 hover:bg-stone-100 rounded-lg relative">
-              <Bell className="w-5 h-5" />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button className="p-2 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg relative">
+              <Bell className="w-5 h-5 dark:text-white" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
             </button>
           </div>
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 p-6 overflow-auto">
+        <div className="flex-1 p-6 overflow-auto dark:bg-stone-950">
           {children}
         </div>
       </main>
@@ -2553,11 +2605,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
+      <ThemeProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </BrowserRouter>
+      </ThemeProvider>
     </QueryClientProvider>
   )
 }
