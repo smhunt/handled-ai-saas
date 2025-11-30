@@ -82,7 +82,14 @@ router.get('/config', async (req, res) => {
       currentTime <= availability.endTime;
 
     res.json({
-      ...business,
+      businessId: business.id,
+      businessName: business.name,
+      logoUrl: business.logoUrl,
+      primaryColor: business.primaryColor,
+      widgetPosition: business.widgetPosition,
+      widgetGreeting: business.widgetGreeting,
+      widgetOfflineMessage: business.widgetOfflineMessage,
+      industry: business.industry,
       isOpen,
       currentTime: now.toISOString()
     });

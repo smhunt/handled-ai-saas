@@ -191,9 +191,11 @@ router.get('/:id', async (req, res) => {
     });
 
     res.json({
-      ...businessUser.business,
-      role: businessUser.role,
-      apiKeys
+      business: {
+        ...businessUser.business,
+        role: businessUser.role,
+        apiKeys
+      }
     });
   } catch (error) {
     console.error('Get business error:', error);
@@ -240,7 +242,7 @@ router.get('/:id/services', async (req, res) => {
       where: { businessId: id },
       orderBy: { sortOrder: 'asc' }
     });
-    res.json(services);
+    res.json({ services });
   } catch (error) {
     console.error('Get services error:', error);
     res.status(500).json({ error: 'Failed to fetch services' });
@@ -259,7 +261,7 @@ router.post('/:id/services', async (req, res) => {
         name,
         description,
         duration: parseInt(duration),
-        price: price ? parseFloat(price) : null,
+        price: price !== undefined && price !== null ? parseFloat(price) : 0,
         isActive: isActive ?? true,
         sortOrder: sortOrder ?? 0
       }
@@ -284,7 +286,7 @@ router.patch('/:id/services/:serviceId', async (req, res) => {
         ...(name && { name }),
         ...(description !== undefined && { description }),
         ...(duration && { duration: parseInt(duration) }),
-        ...(price !== undefined && { price: price ? parseFloat(price) : null }),
+        ...(price !== undefined && { price: parseFloat(price) }),
         ...(isActive !== undefined && { isActive }),
         ...(sortOrder !== undefined && { sortOrder })
       }
@@ -324,7 +326,9 @@ router.get('/:id/menu', async (req, res) => {
         items: { orderBy: { sortOrder: 'asc' } }
       }
     });
-    res.json(categories);
+    // Flatten items for convenience
+    const items = categories.flatMap(c => c.items);
+    res.json({ categories, items });
   } catch (error) {
     console.error('Get menu error:', error);
     res.status(500).json({ error: 'Failed to fetch menu' });
@@ -695,7 +699,7 @@ router.patch('/:id/team/:memberId', async (req, res) => {
 // Remove team member
 router.delete('/:id/team/:memberId', async (req, res) => {
   try {
-    const { id, memberId } = req.params;
+    const { memberId } = req.params;
     const userId = (req as any).userId;
 
     // Prevent removing yourself if you're the owner

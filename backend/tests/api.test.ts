@@ -261,7 +261,7 @@ describe('Location Management', () => {
         address: '123 Main Street',
         city: 'San Francisco',
         state: 'CA',
-        zipCode: '94102',
+        postalCode: '94102',
         phone: '+1-555-0100'
       });
 
