@@ -22,6 +22,7 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { format } from 'date-fns'
 
@@ -617,15 +618,33 @@ function DashboardHome() {
 
 function ConversationsPage() {
   const { business } = useAuth()
+  const queryClient = useQueryClient()
   const [selectedConversation, setSelectedConversation] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const { data: conversationsData } = useQuery({
     queryKey: ['conversations', business?.id],
     queryFn: () => api(`/api/conversations/${business?.id}`),
     enabled: !!business?.id,
     refetchInterval: 10000
+  })
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
+      await Promise.all(ids.map(id =>
+        api(`/api/conversations/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        })
+      ))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      setSelectedIds(new Set())
+    }
   })
 
   const allConversations = conversationsData?.conversations || []
@@ -643,12 +662,36 @@ function ConversationsPage() {
     return matchesSearch && matchesStatus
   })
 
+  // Bulk selection helpers
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedIds(newSelected)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === conversations.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(conversations.map((c: any) => c.id)))
+    }
+  }
+
+  const handleBulkAction = (status: string) => {
+    bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), status })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900">Conversations</h1>
-          <p className="text-stone-600">Manage customer chat conversations</p>
+          <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Conversations</h1>
+          <p className="text-stone-600 dark:text-stone-400">Manage customer chat conversations</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -680,6 +723,29 @@ function ConversationsPage() {
         </div>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+            {selectedIds.size} conversation{selectedIds.size > 1 ? 's' : ''} selected
+          </span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('RESOLVED')} disabled={bulkUpdateMutation.isPending}>
+              <Check className="w-4 h-4 mr-1" /> Resolve
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('ARCHIVED')} disabled={bulkUpdateMutation.isPending}>
+              Archive
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('ACTIVE')} disabled={bulkUpdateMutation.isPending}>
+              Reopen
+            </Button>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())} className="ml-auto">
+            Clear Selection
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Conversation List */}
         <Card className="lg:col-span-1">
@@ -692,6 +758,15 @@ function ConversationsPage() {
                 onChange={e => setSearchQuery(e.target.value)}
               />
             </div>
+            {conversations.length > 0 && (
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t">
+                <Checkbox
+                  checked={conversations.length > 0 && selectedIds.size === conversations.length}
+                  onCheckedChange={toggleSelectAll}
+                />
+                <span className="text-sm text-stone-500">Select all</span>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-[600px]">
@@ -699,34 +774,46 @@ function ConversationsPage() {
                 <div className="p-6 text-center text-stone-500">No conversations yet</div>
               ) : (
                 conversations.map((conv: any) => (
-                  <button
+                  <div
                     key={conv.id}
-                    onClick={() => setSelectedConversation(conv)}
-                    className={`w-full p-4 border-b border-stone-100 hover:bg-stone-50 text-left transition-colors ${
-                      selectedConversation?.id === conv.id ? 'bg-orange-50' : ''
-                    }`}
+                    className={`w-full p-4 border-b border-stone-100 dark:border-stone-800 hover:bg-stone-50 dark:hover:bg-stone-800 text-left transition-colors ${
+                      selectedConversation?.id === conv.id ? 'bg-orange-50 dark:bg-orange-950' : ''
+                    } ${selectedIds.has(conv.id) ? 'bg-blue-50 dark:bg-blue-950' : ''}`}
                   >
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback>{conv.customerName?.[0] || 'V'}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium truncate">{conv.customerName || 'Visitor'}</span>
-                          <span className="text-xs text-stone-500">{format(new Date(conv.lastMessageAt), 'h:mm a')}</span>
-                        </div>
-                        <p className="text-sm text-stone-500 truncate">{conv.messages?.[0]?.content || 'No messages'}</p>
+                    <div className="flex items-start gap-3">
+                      <div className="pt-1" onClick={(e) => toggleSelect(conv.id, e)}>
+                        <Checkbox
+                          checked={selectedIds.has(conv.id)}
+                          onCheckedChange={() => {}}
+                        />
                       </div>
+                      <button
+                        onClick={() => setSelectedConversation(conv)}
+                        className="flex-1 text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarFallback>{conv.customerName?.[0] || 'V'}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium truncate">{conv.customerName || 'Visitor'}</span>
+                              <span className="text-xs text-stone-500">{format(new Date(conv.lastMessageAt), 'h:mm a')}</span>
+                            </div>
+                            <p className="text-sm text-stone-500 truncate">{conv.messages?.[0]?.content || 'No messages'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2 ml-10">
+                          <Badge variant={conv.status === 'ACTIVE' ? 'default' : 'secondary'} className="text-xs">
+                            {conv.status}
+                          </Badge>
+                          {conv.handedOffToHuman && (
+                            <Badge variant="destructive" className="text-xs">Needs attention</Badge>
+                          )}
+                        </div>
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge variant={conv.status === 'ACTIVE' ? 'default' : 'secondary'} className="text-xs">
-                        {conv.status}
-                      </Badge>
-                      {conv.handedOffToHuman && (
-                        <Badge variant="destructive" className="text-xs">Needs attention</Badge>
-                      )}
-                    </div>
-                  </button>
+                  </div>
                 ))
               )}
             </ScrollArea>
@@ -790,14 +877,33 @@ function ConversationsPage() {
 
 function BookingsPage() {
   const { business } = useAuth()
+  const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [dateFilter, setDateFilter] = useState<string>('ALL')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const { data: bookingsData } = useQuery({
     queryKey: ['bookings', business?.id],
     queryFn: () => api(`/api/bookings/${business?.id}`),
     enabled: !!business?.id
+  })
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
+      // Update each booking in parallel
+      await Promise.all(ids.map(id =>
+        api(`/api/bookings/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        })
+      ))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+      setSelectedIds(new Set())
+    }
   })
 
   const allBookings = bookingsData?.bookings || []
@@ -834,12 +940,35 @@ function BookingsPage() {
     return matchesSearch && matchesStatus && matchesDate
   })
 
+  // Bulk selection helpers
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedIds(newSelected)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === bookings.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(bookings.map((b: any) => b.id)))
+    }
+  }
+
+  const handleBulkAction = (status: string) => {
+    bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), status })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900">Bookings</h1>
-          <p className="text-stone-600">Manage reservations and appointments</p>
+          <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Bookings</h1>
+          <p className="text-stone-600 dark:text-stone-400">Manage reservations and appointments</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -861,6 +990,29 @@ function BookingsPage() {
           <Button><Plus className="w-4 h-4 mr-2" /> New Booking</Button>
         </div>
       </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+            {selectedIds.size} booking{selectedIds.size > 1 ? 's' : ''} selected
+          </span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('CONFIRMED')} disabled={bulkUpdateMutation.isPending}>
+              <Check className="w-4 h-4 mr-1" /> Confirm
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('COMPLETED')} disabled={bulkUpdateMutation.isPending}>
+              <Check className="w-4 h-4 mr-1" /> Complete
+            </Button>
+            <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => handleBulkAction('CANCELLED')} disabled={bulkUpdateMutation.isPending}>
+              <X className="w-4 h-4 mr-1" /> Cancel
+            </Button>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())} className="ml-auto">
+            Clear Selection
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <Input
@@ -899,24 +1051,36 @@ function BookingsPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-stone-50 border-b">
+              <thead className="bg-stone-50 dark:bg-stone-800 border-b">
                 <tr>
-                  <th className="text-left p-4 font-medium text-stone-600">Customer</th>
-                  <th className="text-left p-4 font-medium text-stone-600">Date & Time</th>
-                  <th className="text-left p-4 font-medium text-stone-600">Party Size</th>
-                  <th className="text-left p-4 font-medium text-stone-600">Status</th>
-                  <th className="text-left p-4 font-medium text-stone-600">Confirmation</th>
+                  <th className="p-4 w-12">
+                    <Checkbox
+                      checked={bookings.length > 0 && selectedIds.size === bookings.length}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </th>
+                  <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Customer</th>
+                  <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Date & Time</th>
+                  <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Party Size</th>
+                  <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Status</th>
+                  <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Confirmation</th>
                   <th className="p-4"></th>
                 </tr>
               </thead>
               <tbody>
                 {bookings.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-stone-500">No bookings yet</td>
+                    <td colSpan={7} className="p-8 text-center text-stone-500">No bookings yet</td>
                   </tr>
                 ) : (
                   bookings.map((booking: any) => (
-                    <tr key={booking.id} className="border-b hover:bg-stone-50">
+                    <tr key={booking.id} className={`border-b hover:bg-stone-50 dark:hover:bg-stone-800 ${selectedIds.has(booking.id) ? 'bg-blue-50 dark:bg-blue-950' : ''}`}>
+                      <td className="p-4">
+                        <Checkbox
+                          checked={selectedIds.has(booking.id)}
+                          onCheckedChange={() => toggleSelect(booking.id)}
+                        />
+                      </td>
                       <td className="p-4">
                         <div>
                           <div className="font-medium">{booking.customerName}</div>
@@ -964,13 +1128,31 @@ function BookingsPage() {
 
 function OrdersPage() {
   const { business } = useAuth()
+  const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const { data: ordersData } = useQuery({
     queryKey: ['orders', business?.id],
     queryFn: () => api(`/api/orders/${business?.id}`),
     enabled: !!business?.id
+  })
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
+      await Promise.all(ids.map(id =>
+        api(`/api/orders/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        })
+      ))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+      setSelectedIds(new Set())
+    }
   })
 
   const allOrders = ordersData?.orders || []
@@ -987,12 +1169,35 @@ function OrdersPage() {
     return matchesSearch && matchesType
   })
 
+  // Bulk selection helpers
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedIds(newSelected)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === orders.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(orders.map((o: any) => o.id)))
+    }
+  }
+
+  const handleBulkAction = (status: string) => {
+    bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), status })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900">Orders</h1>
-          <p className="text-stone-600">Manage takeout and delivery orders</p>
+          <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Orders</h1>
+          <p className="text-stone-600 dark:text-stone-400">Manage takeout and delivery orders</p>
         </div>
         <Button
           variant="outline"
@@ -1010,6 +1215,35 @@ function OrdersPage() {
           <Download className="w-4 h-4 mr-2" /> Export CSV
         </Button>
       </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+            {selectedIds.size} order{selectedIds.size > 1 ? 's' : ''} selected
+          </span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('CONFIRMED')} disabled={bulkUpdateMutation.isPending}>
+              Confirm
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('PREPARING')} disabled={bulkUpdateMutation.isPending}>
+              Preparing
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('READY')} disabled={bulkUpdateMutation.isPending}>
+              Ready
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('COMPLETED')} disabled={bulkUpdateMutation.isPending}>
+              <Check className="w-4 h-4 mr-1" /> Complete
+            </Button>
+            <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => handleBulkAction('CANCELLED')} disabled={bulkUpdateMutation.isPending}>
+              <X className="w-4 h-4 mr-1" /> Cancel
+            </Button>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())} className="ml-auto">
+            Clear Selection
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <Input
@@ -1096,27 +1330,45 @@ function OrdersPage() {
           <Card>
             <CardContent className="p-0">
               <table className="w-full">
-                <thead className="bg-stone-50 border-b">
+                <thead className="bg-stone-50 dark:bg-stone-800 border-b">
                   <tr>
-                    <th className="text-left p-4">Order #</th>
-                    <th className="text-left p-4">Customer</th>
-                    <th className="text-left p-4">Type</th>
-                    <th className="text-left p-4">Total</th>
-                    <th className="text-left p-4">Status</th>
-                    <th className="text-left p-4">Date</th>
+                    <th className="p-4 w-12">
+                      <Checkbox
+                        checked={orders.length > 0 && selectedIds.size === orders.length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </th>
+                    <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Order #</th>
+                    <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Customer</th>
+                    <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Type</th>
+                    <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Total</th>
+                    <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Status</th>
+                    <th className="text-left p-4 font-medium text-stone-600 dark:text-stone-300">Date</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((order: any) => (
-                    <tr key={order.id} className="border-b">
-                      <td className="p-4 font-mono">{order.orderNumber}</td>
-                      <td className="p-4">{order.customerName}</td>
-                      <td className="p-4"><Badge variant="secondary">{order.type}</Badge></td>
-                      <td className="p-4">${order.total.toFixed(2)}</td>
-                      <td className="p-4"><Badge>{order.status}</Badge></td>
-                      <td className="p-4 text-sm text-stone-500">{format(new Date(order.createdAt), 'MMM d, h:mm a')}</td>
+                  {orders.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-stone-500">No orders yet</td>
                     </tr>
-                  ))}
+                  ) : (
+                    orders.map((order: any) => (
+                      <tr key={order.id} className={`border-b hover:bg-stone-50 dark:hover:bg-stone-800 ${selectedIds.has(order.id) ? 'bg-blue-50 dark:bg-blue-950' : ''}`}>
+                        <td className="p-4">
+                          <Checkbox
+                            checked={selectedIds.has(order.id)}
+                            onCheckedChange={() => toggleSelect(order.id)}
+                          />
+                        </td>
+                        <td className="p-4 font-mono">{order.orderNumber}</td>
+                        <td className="p-4">{order.customerName}</td>
+                        <td className="p-4"><Badge variant="secondary">{order.type}</Badge></td>
+                        <td className="p-4">${order.total.toFixed(2)}</td>
+                        <td className="p-4"><Badge>{order.status}</Badge></td>
+                        <td className="p-4 text-sm text-stone-500">{format(new Date(order.createdAt), 'MMM d, h:mm a')}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </CardContent>

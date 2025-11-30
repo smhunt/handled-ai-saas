@@ -63,7 +63,7 @@
 - [x] Dark mode toggle (with localStorage persistence)
 - [ ] Real-time updates via WebSocket
 - [x] Export data to CSV (Bookings, Orders, Conversations)
-- [ ] Bulk operations
+- [x] Bulk operations (Bookings, Orders, Conversations)
 
 ### Landing Page
 - [x] Contact form submission
