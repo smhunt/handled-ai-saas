@@ -325,16 +325,69 @@ export function setupSocketHandlers(io: SocketServer) {
     // Notify business of new booking
     notifyNewBooking(businessId: string, booking: any) {
       io.to(`business:${businessId}`).emit('new_booking', booking);
+      io.to(`business:${businessId}`).emit('notification', {
+        id: `booking-${booking.id}`,
+        type: 'booking',
+        title: 'New Booking',
+        message: `${booking.customerName} booked for ${new Date(booking.startTime).toLocaleDateString()}`,
+        data: booking,
+        createdAt: new Date().toISOString()
+      });
     },
 
     // Notify business of new order
     notifyNewOrder(businessId: string, order: any) {
       io.to(`business:${businessId}`).emit('new_order', order);
+      io.to(`business:${businessId}`).emit('notification', {
+        id: `order-${order.id}`,
+        type: 'order',
+        title: 'New Order',
+        message: `Order #${order.orderNumber} from ${order.customerName} - $${order.total?.toFixed(2) || '0.00'}`,
+        data: order,
+        createdAt: new Date().toISOString()
+      });
     },
 
     // Notify business of handoff request
     notifyHandoffRequest(businessId: string, conversation: any) {
       io.to(`business:${businessId}`).emit('handoff_request', conversation);
+      io.to(`business:${businessId}`).emit('notification', {
+        id: `handoff-${conversation.id}`,
+        type: 'handoff',
+        title: 'Customer Needs Help',
+        message: `${conversation.customerName || 'A customer'} requested human assistance`,
+        data: conversation,
+        createdAt: new Date().toISOString(),
+        priority: 'high'
+      });
+    },
+
+    // Notify of new conversation
+    notifyNewConversation(businessId: string, conversation: any) {
+      io.to(`business:${businessId}`).emit('new_conversation', conversation);
+      io.to(`business:${businessId}`).emit('notification', {
+        id: `conversation-${conversation.id}`,
+        type: 'conversation',
+        title: 'New Conversation',
+        message: `${conversation.customerName || 'A visitor'} started a conversation`,
+        data: conversation,
+        createdAt: new Date().toISOString()
+      });
+    },
+
+    // Send generic notification
+    sendNotification(businessId: string, notification: {
+      type: string;
+      title: string;
+      message: string;
+      data?: any;
+      priority?: 'low' | 'normal' | 'high';
+    }) {
+      io.to(`business:${businessId}`).emit('notification', {
+        id: `notif-${Date.now()}`,
+        ...notification,
+        createdAt: new Date().toISOString()
+      });
     },
 
     // Send message to specific conversation

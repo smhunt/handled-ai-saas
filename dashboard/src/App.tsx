@@ -24,7 +24,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
+import { io, Socket } from 'socket.io-client'
 
 // API Configuration
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
@@ -106,6 +107,192 @@ function ThemeToggle() {
     >
       {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
     </button>
+  )
+}
+
+// Notification Types & Context
+interface Notification {
+  id: string
+  type: 'booking' | 'order' | 'conversation' | 'handoff' | 'info'
+  title: string
+  message: string
+  data?: any
+  createdAt: string
+  read?: boolean
+  priority?: 'low' | 'normal' | 'high'
+}
+
+interface NotificationContextType {
+  notifications: Notification[]
+  unreadCount: number
+  markAsRead: (id: string) => void
+  markAllAsRead: () => void
+  clearNotifications: () => void
+}
+
+const NotificationContext = createContext<NotificationContextType | null>(null)
+
+function useNotifications() {
+  const context = useContext(NotificationContext)
+  if (!context) throw new Error('useNotifications must be used within NotificationProvider')
+  return context
+}
+
+function NotificationProvider({ children, token, businessId }: { children: React.ReactNode; token: string | null; businessId: string | null }) {
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [socket, setSocket] = useState<Socket | null>(null)
+
+  useEffect(() => {
+    if (!token || !businessId) return
+
+    // Connect to socket
+    const newSocket = io(API_URL, {
+      auth: { token }
+    })
+
+    newSocket.on('connect', () => {
+      console.log('Connected to notification socket')
+    })
+
+    newSocket.on('notification', (notification: Notification) => {
+      setNotifications(prev => [{ ...notification, read: false }, ...prev].slice(0, 50))
+    })
+
+    newSocket.on('new_booking', (booking: any) => {
+      console.log('New booking:', booking)
+    })
+
+    newSocket.on('new_order', (order: any) => {
+      console.log('New order:', order)
+    })
+
+    newSocket.on('conversation_updated', (data: any) => {
+      console.log('Conversation updated:', data)
+    })
+
+    newSocket.on('disconnect', () => {
+      console.log('Disconnected from notification socket')
+    })
+
+    setSocket(newSocket)
+
+    return () => {
+      newSocket.disconnect()
+    }
+  }, [token, businessId])
+
+  const unreadCount = notifications.filter(n => !n.read).length
+
+  const markAsRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+  }
+
+  const markAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  }
+
+  const clearNotifications = () => {
+    setNotifications([])
+  }
+
+  return (
+    <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications }}>
+      {children}
+    </NotificationContext.Provider>
+  )
+}
+
+// Notification Bell Component
+function NotificationBell() {
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications } = useNotifications()
+  const navigate = useNavigate()
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'booking': return <Calendar className="w-4 h-4 text-green-500" />
+      case 'order': return <ShoppingBag className="w-4 h-4 text-blue-500" />
+      case 'conversation': return <MessageSquare className="w-4 h-4 text-purple-500" />
+      case 'handoff': return <Users className="w-4 h-4 text-red-500" />
+      default: return <Bell className="w-4 h-4 text-stone-500" />
+    }
+  }
+
+  const handleNotificationClick = (notification: Notification) => {
+    markAsRead(notification.id)
+    // Navigate based on type
+    switch (notification.type) {
+      case 'booking': navigate('/bookings'); break
+      case 'order': navigate('/orders'); break
+      case 'conversation':
+      case 'handoff': navigate('/conversations'); break
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="p-2 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg relative">
+          <Bell className="w-5 h-5 dark:text-white" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs rounded-full flex items-center justify-center px-1">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <div className="flex items-center justify-between px-3 py-2 border-b">
+          <span className="font-semibold text-sm">Notifications</span>
+          {notifications.length > 0 && (
+            <div className="flex gap-2">
+              <button onClick={markAllAsRead} className="text-xs text-blue-600 hover:underline">
+                Mark all read
+              </button>
+              <button onClick={clearNotifications} className="text-xs text-stone-500 hover:underline">
+                Clear
+              </button>
+            </div>
+          )}
+        </div>
+        <ScrollArea className="max-h-80">
+          {notifications.length === 0 ? (
+            <div className="p-6 text-center text-stone-500 text-sm">
+              No notifications yet
+            </div>
+          ) : (
+            notifications.map(notification => (
+              <button
+                key={notification.id}
+                onClick={() => handleNotificationClick(notification)}
+                className={`w-full p-3 text-left hover:bg-stone-50 dark:hover:bg-stone-800 border-b last:border-b-0 ${
+                  !notification.read ? 'bg-blue-50 dark:bg-blue-950' : ''
+                }`}
+              >
+                <div className="flex gap-3">
+                  <div className="shrink-0 mt-0.5">
+                    {getNotificationIcon(notification.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-medium truncate ${notification.priority === 'high' ? 'text-red-600' : ''}`}>
+                        {notification.title}
+                      </span>
+                      {!notification.read && (
+                        <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-xs text-stone-500 truncate">{notification.message}</p>
+                    <p className="text-xs text-stone-400 mt-1">
+                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </ScrollArea>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -478,10 +665,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <button className="p-2 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg relative">
-              <Bell className="w-5 h-5 dark:text-white" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-            </button>
+            <NotificationBell />
           </div>
         </header>
 
@@ -2854,13 +3038,25 @@ function AppRoutes() {
   )
 }
 
+// Wrapper to provide notifications with auth context
+function AuthenticatedNotifications({ children }: { children: React.ReactNode }) {
+  const { token, business } = useAuth()
+  return (
+    <NotificationProvider token={token} businessId={business?.id || null}>
+      {children}
+    </NotificationProvider>
+  )
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <BrowserRouter>
           <AuthProvider>
-            <AppRoutes />
+            <AuthenticatedNotifications>
+              <AppRoutes />
+            </AuthenticatedNotifications>
           </AuthProvider>
         </BrowserRouter>
       </ThemeProvider>

@@ -55,13 +55,13 @@
 - [x] Email notification service (nodemailer setup)
 - [x] SMS notifications (Twilio integration)
 - [x] Webhook notifications
-- [ ] In-app notifications (requires WebSocket)
+- [x] In-app notifications (WebSocket + dashboard bell)
 
 ## Priority: Low (Nice to Have)
 
 ### Dashboard Improvements
 - [x] Dark mode toggle (with localStorage persistence)
-- [ ] Real-time updates via WebSocket
+- [x] Real-time updates via WebSocket (notification system)
 - [x] Export data to CSV (Bookings, Orders, Conversations)
 - [x] Bulk operations (Bookings, Orders, Conversations)
 
