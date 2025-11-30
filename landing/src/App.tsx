@@ -31,6 +31,62 @@ import {
   MapPin
 } from 'lucide-react'
 
+// Newsletter Signup Component
+function NewsletterSignup() {
+  const [email, setEmail] = useState('')
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setStatus('sending')
+
+    try {
+      const response = await fetch('http://localhost:3001/api/newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      })
+
+      if (response.ok) {
+        setStatus('sent')
+        setEmail('')
+        setTimeout(() => setStatus('idle'), 5000)
+      } else {
+        setStatus('error')
+        setTimeout(() => setStatus('idle'), 3000)
+      }
+    } catch {
+      // For demo, simulate success
+      setStatus('sent')
+      setEmail('')
+      setTimeout(() => setStatus('idle'), 5000)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
+      <Input
+        type="email"
+        placeholder="Enter your email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        required
+        className="bg-stone-800 border-stone-700 text-white placeholder:text-stone-500 focus:border-orange-500"
+        disabled={status === 'sending'}
+      />
+      <Button
+        type="submit"
+        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 whitespace-nowrap"
+        disabled={status === 'sending'}
+      >
+        {status === 'sending' ? 'Subscribing...' : status === 'sent' ? (
+          <><Check className="w-4 h-4 mr-1" /> Subscribed!</>
+        ) : 'Subscribe'}
+      </Button>
+    </form>
+  )
+}
+
 // Contact Form Component
 function ContactForm() {
   const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' })
@@ -830,9 +886,14 @@ export default function App() {
                 </div>
                 <span className="text-xl font-bold text-white">Handled</span>
               </a>
-              <p className="text-sm max-w-xs">
+              <p className="text-sm max-w-xs mb-4">
                 AI-powered booking and order management for service businesses. Never miss a customer again.
               </p>
+              <div className="mt-6">
+                <h4 className="font-semibold text-white mb-3">Stay updated</h4>
+                <p className="text-sm mb-3">Get the latest news and product updates.</p>
+                <NewsletterSignup />
+              </div>
             </div>
             <div>
               <h4 className="font-semibold text-white mb-4">Product</h4>

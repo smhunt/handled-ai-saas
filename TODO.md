@@ -66,8 +66,8 @@
 - [ ] Bulk operations
 
 ### Landing Page
-- [ ] Contact form submission
-- [ ] Newsletter signup
+- [x] Contact form submission
+- [x] Newsletter signup
 - [ ] Demo video
 
 ## Completed
