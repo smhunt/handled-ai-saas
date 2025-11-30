@@ -62,7 +62,7 @@
 ### Dashboard Improvements
 - [ ] Dark mode toggle
 - [ ] Real-time updates via WebSocket
-- [ ] Export data to CSV
+- [x] Export data to CSV (Bookings, Orders, Conversations)
 - [ ] Bulk operations
 
 ### Landing Page
@@ -99,6 +99,7 @@
 - [x] Email notifications (nodemailer)
 - [x] SMS notifications (Twilio)
 - [x] Webhook notifications
+- [x] CSV export for Bookings, Orders, Conversations
 
 ---
 Last Updated: 2025-11-30
