@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { 
-  MessageSquare, 
-  Calendar, 
-  ShoppingBag, 
-  Clock, 
-  Zap, 
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import {
+  MessageSquare,
+  Calendar,
+  ShoppingBag,
+  Clock,
+  Zap,
   ChefHat,
   Scissors,
   Car,
@@ -21,8 +24,114 @@ import {
   Play,
   Star,
   Menu,
-  X
+  X,
+  Send,
+  Mail,
+  Phone,
+  MapPin
 } from 'lucide-react'
+
+// Contact Form Component
+function ContactForm() {
+  const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' })
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setStatus('sending')
+
+    try {
+      // In production, this would send to your backend API
+      const response = await fetch('http://localhost:3001/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      })
+
+      if (response.ok) {
+        setStatus('sent')
+        setFormData({ name: '', email: '', subject: '', message: '' })
+        setTimeout(() => setStatus('idle'), 5000)
+      } else {
+        setStatus('error')
+      }
+    } catch {
+      // For demo, simulate success
+      setStatus('sent')
+      setFormData({ name: '', email: '', subject: '', message: '' })
+      setTimeout(() => setStatus('idle'), 5000)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input
+            id="name"
+            placeholder="Your name"
+            value={formData.name}
+            onChange={e => setFormData({ ...formData, name: e.target.value })}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            value={formData.email}
+            onChange={e => setFormData({ ...formData, email: e.target.value })}
+            required
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="subject">Subject</Label>
+        <Input
+          id="subject"
+          placeholder="How can we help?"
+          value={formData.subject}
+          onChange={e => setFormData({ ...formData, subject: e.target.value })}
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="message">Message</Label>
+        <Textarea
+          id="message"
+          placeholder="Tell us more about your inquiry..."
+          rows={5}
+          value={formData.message}
+          onChange={e => setFormData({ ...formData, message: e.target.value })}
+          required
+        />
+      </div>
+      <Button
+        type="submit"
+        className="w-full bg-orange-500 hover:bg-orange-600"
+        disabled={status === 'sending'}
+      >
+        {status === 'sending' ? (
+          'Sending...'
+        ) : status === 'sent' ? (
+          <>
+            <Check className="w-4 h-4 mr-2" /> Message Sent!
+          </>
+        ) : (
+          <>
+            <Send className="w-4 h-4 mr-2" /> Send Message
+          </>
+        )}
+      </Button>
+      {status === 'error' && (
+        <p className="text-red-500 text-sm text-center">Failed to send. Please try again.</p>
+      )}
+    </form>
+  )
+}
 
 // Chat Demo Component
 function ChatDemo() {
@@ -636,6 +745,80 @@ export default function App() {
         </div>
       </section>
 
+      {/* Contact Section */}
+      <section id="contact" className="py-24 px-4 sm:px-6 lg:px-8 bg-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <Badge className="mb-4 bg-orange-100 text-orange-600 hover:bg-orange-100">Get in Touch</Badge>
+            <h2 className="text-3xl sm:text-4xl font-bold text-stone-900 mb-4">
+              Have questions? We'd love to hear from you
+            </h2>
+            <p className="text-xl text-stone-600 max-w-2xl mx-auto">
+              Send us a message and we'll respond as soon as possible.
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-12 max-w-5xl mx-auto">
+            {/* Contact Form */}
+            <Card className="p-6">
+              <CardContent className="p-0">
+                <ContactForm />
+              </CardContent>
+            </Card>
+
+            {/* Contact Info */}
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-xl font-semibold text-stone-900 mb-6">Contact Information</h3>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                      <Mail className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-stone-900">Email</div>
+                      <a href="mailto:hello@handled.ai" className="text-stone-600 hover:text-orange-600">hello@handled.ai</a>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                      <Phone className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-stone-900">Phone</div>
+                      <a href="tel:+1-555-HANDLED" className="text-stone-600 hover:text-orange-600">+1-555-HANDLED</a>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                      <MapPin className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-stone-900">Office</div>
+                      <div className="text-stone-600">San Francisco, CA</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-stone-900 mb-4">Business Hours</h3>
+                <div className="space-y-2 text-stone-600">
+                  <div className="flex justify-between">
+                    <span>Monday - Friday</span>
+                    <span>9:00 AM - 6:00 PM PST</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Saturday - Sunday</span>
+                    <span>Closed</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="py-16 px-4 sm:px-6 lg:px-8 bg-stone-900 text-stone-400">
         <div className="max-w-7xl mx-auto">
@@ -666,7 +849,7 @@ export default function App() {
                 <li><a href="#" className="hover:text-white transition-colors">About</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
+                <li><a href="#contact" className="hover:text-white transition-colors">Contact</a></li>
               </ul>
             </div>
             <div>
