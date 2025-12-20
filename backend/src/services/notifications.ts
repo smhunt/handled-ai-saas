@@ -1,8 +1,11 @@
 // Notification Service - Email and SMS notifications
 import nodemailer from 'nodemailer';
 import twilio from 'twilio';
+import jwt from 'jsonwebtoken';
 import { PrismaClient, NotificationType, NotificationChannel } from '@prisma/client';
 import { format } from 'date-fns';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 const prisma = new PrismaClient();
 
@@ -449,4 +452,58 @@ export async function sendBookingReminder(booking: any) {
     where: { id: booking.id },
     data: { reminderSent: true }
   });
+}
+
+// ============================================
+// TEAM INVITATION
+// ============================================
+
+export async function sendTeamInvitationEmail(
+  userEmail: string,
+  userId: string,
+  businessName: string,
+  role: string
+) {
+  try {
+    // Generate an invitation token (expires in 7 days)
+    const inviteToken = jwt.sign(
+      { userId, purpose: 'team-invite' },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    const setPasswordUrl = `${process.env.APP_URL || 'http://localhost:5173'}/set-password?token=${inviteToken}`;
+
+    await emailTransporter.sendMail({
+      from: `"Handled" <${process.env.SMTP_FROM || 'notifications@handled.ai'}>`,
+      to: userEmail,
+      subject: `You've been invited to join ${businessName} on Handled`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #f97316;">You've Been Invited!</h2>
+          <p>Hi there,</p>
+          <p>You've been invited to join <strong>${businessName}</strong> on Handled as a <strong>${role}</strong>.</p>
+          <p>Handled is an AI-powered platform that helps businesses manage bookings, orders, and customer conversations.</p>
+          <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0;"><strong>Business:</strong> ${businessName}</p>
+            <p style="margin: 10px 0 0;"><strong>Your Role:</strong> ${role}</p>
+          </div>
+          <p>To get started, click the button below to set your password:</p>
+          <p>
+            <a href="${setPasswordUrl}"
+               style="background: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+              Set Your Password
+            </a>
+          </p>
+          <p style="color: #666; font-size: 14px; margin-top: 30px;">
+            This invitation link will expire in 7 days. If you didn't expect this invitation, you can ignore this email.
+          </p>
+        </div>
+      `
+    });
+
+    console.log(`Team invitation email sent to ${userEmail} for business ${businessName}`);
+  } catch (error) {
+    console.error('Failed to send team invitation email:', error);
+  }
 }
