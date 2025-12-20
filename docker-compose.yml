@@ -132,9 +132,66 @@ services:
     profiles:
       - production
 
+  # ==============================================
+  # MONITORING - Prometheus
+  # ==============================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: handled-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=90d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    profiles:
+      - monitoring
+
+  # ==============================================
+  # MONITORING - Grafana
+  # ==============================================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: handled-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-handled123}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3003}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3003:3000"
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+  # ==============================================
+  # MONITORING - Pushgateway (for batch jobs)
+  # ==============================================
+  pushgateway:
+    image: prom/pushgateway:v1.6.2
+    container_name: handled-pushgateway
+    restart: unless-stopped
+    ports:
+      - "9091:9091"
+    profiles:
+      - monitoring
+
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   default:

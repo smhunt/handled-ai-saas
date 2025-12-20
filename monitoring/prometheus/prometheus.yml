@@ -1,0 +1,28 @@
+# Prometheus Configuration for Handled AI SaaS
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alerting (optional - can add later)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: []
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Pushgateway - for batch job metrics (Claude Code usage)
+  - job_name: 'pushgateway'
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']
+
+  # Backend API metrics (if we add /metrics endpoint later)
+  # - job_name: 'handled-api'
+  #   static_configs:
+  #     - targets: ['api:3001']
+  #   metrics_path: '/metrics'
