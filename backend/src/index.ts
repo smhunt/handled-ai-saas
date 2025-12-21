@@ -2,9 +2,12 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { createServer } from 'http';
+import { createServer as createHttpServer } from 'http';
+import { createServer as createHttpsServer } from 'https';
 import { Server as SocketServer } from 'socket.io';
 import rateLimit from 'express-rate-limit';
+import fs from 'fs';
+import path from 'path';
 import 'dotenv/config';
 
 import { authRouter } from './routes/auth';
@@ -23,10 +26,20 @@ import { errorHandler } from './middleware/errorHandler';
 import { setupSocketHandlers } from './services/socket';
 
 const app = express();
-const httpServer = createServer(app);
+
+// SSL Configuration
+const certPath = '/Users/seanhunt/Code/.shared-certs';
+const useHttps = fs.existsSync(path.join(certPath, 'key.pem'));
+
+const server = useHttps
+  ? createHttpsServer({
+      key: fs.readFileSync(path.join(certPath, 'key.pem')),
+      cert: fs.readFileSync(path.join(certPath, 'cert.pem')),
+    }, app)
+  : createHttpServer(app);
 
 // Socket.io for real-time chat
-const io = new SocketServer(httpServer, {
+const io = new SocketServer(server, {
   cors: {
     origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000'],
     methods: ['GET', 'POST']
@@ -42,10 +55,11 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting
+// Rate limiting (higher limit in development)
+const isDev = process.env.NODE_ENV !== 'production';
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: isDev ? 1000 : 100, // 1000 in dev, 100 in production
   message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/api/', limiter);
@@ -112,8 +126,8 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3001;
 
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Handled API running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Handled API running on port ${PORT} (${useHttps ? 'HTTPS' : 'HTTP'})`);
   console.log(`📡 WebSocket server ready`);
 });
 

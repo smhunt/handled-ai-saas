@@ -6,9 +6,12 @@ import { PrismaClient } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import { handleConversation } from '../services/conversation';
 import { checkUsageLimit, checkBusinessActive } from '../middleware/usageLimits';
+import { verifyToken } from '@clerk/backend';
+import jwt from 'jsonwebtoken';
 
 const router = Router();
 const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Middleware to validate API key
 async function validateApiKey(req: any, res: any, next: any) {
@@ -41,6 +44,122 @@ async function validateApiKey(req: any, res: any, next: any) {
   req.apiKeyId = key.id;
   next();
 }
+
+// Preview endpoint - uses dashboard auth instead of API key
+// This allows testing the widget before creating API keys
+router.post('/preview/chat', async (req, res) => {
+  console.log('Preview chat request received:', { body: req.body, hasAuth: !!req.headers.authorization });
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      console.log('Preview chat: No token provided');
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    let userId: string | null = null;
+
+    // Try Clerk token first, then fallback to legacy JWT
+    try {
+      const payload = await verifyToken(token, {
+        secretKey: process.env.CLERK_SECRET_KEY!
+      });
+      const clerkUserId = payload.sub;
+      console.log('Preview chat: Clerk user ID:', clerkUserId);
+
+      // Try to find by clerkId first
+      let user = await prisma.user.findFirst({ where: { clerkId: clerkUserId } });
+
+      // If not found by clerkId, get email from Clerk and find by email
+      if (!user && clerkUserId) {
+        console.log('Preview chat: User not found by clerkId, checking by email...');
+        const { createClerkClient } = await import('@clerk/backend');
+        const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+        const clerkUser = await clerk.users.getUser(clerkUserId);
+        const email = clerkUser.emailAddresses[0]?.emailAddress;
+
+        if (email) {
+          user = await prisma.user.findUnique({ where: { email } });
+          if (user) {
+            // Link the user to Clerk
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { clerkId: clerkUserId }
+            });
+            console.log('Preview chat: Linked user to Clerk:', user.id);
+          }
+        }
+      }
+
+      userId = user?.id || null;
+      console.log('Preview chat: Found user:', userId);
+    } catch (clerkError) {
+      console.log('Preview chat: Clerk verification failed, trying legacy JWT:', clerkError);
+      // Fallback to legacy JWT
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+        userId = decoded.userId;
+        console.log('Preview chat: Legacy JWT user:', userId);
+      } catch {
+        console.log('Preview chat: Both auth methods failed');
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+    }
+
+    if (!userId) {
+      console.log('Preview chat: No user found');
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const { businessId, message, sessionId } = req.body;
+
+    if (!businessId) {
+      return res.status(400).json({ error: 'Business ID required' });
+    }
+
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message required' });
+    }
+
+    // Verify user has access to this business
+    const businessUser = await prisma.businessUser.findFirst({
+      where: { userId, businessId }
+    });
+
+    if (!businessUser) {
+      return res.status(403).json({ error: 'Access denied to this business' });
+    }
+
+    // Get or create preview conversation
+    let conversationId = sessionId;
+    if (!conversationId) {
+      const conversation = await prisma.conversation.create({
+        data: {
+          businessId,
+          visitorId: `preview_${userId}`,
+          channel: 'WEB',
+          status: 'ACTIVE',
+          metadata: { isPreview: true }
+        }
+      });
+      conversationId = conversation.id;
+    }
+
+    // Process with AI
+    const aiResponse = await handleConversation(
+      businessId,
+      conversationId,
+      message
+    );
+
+    res.json({
+      response: aiResponse,
+      sessionId: conversationId
+    });
+  } catch (error) {
+    console.error('Preview chat error:', error);
+    res.status(500).json({ error: 'Failed to process message' });
+  }
+});
 
 router.use(validateApiKey);
 router.use(checkBusinessActive);

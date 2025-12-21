@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { verifyToken, createClerkClient } from '@clerk/backend';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 
@@ -11,6 +12,11 @@ const prisma = new PrismaClient();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const SUPER_ADMIN_EMAILS = (process.env.SUPER_ADMIN_EMAILS || 'admin@handled.ai').split(',');
+
+// Initialize Clerk client
+const clerk = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY!
+});
 
 // Validation schemas
 const signupSchema = z.object({
@@ -150,7 +156,7 @@ router.post('/logout', async (req, res) => {
   }
 });
 
-// Get current user
+// Get current user (supports both Clerk and legacy JWT)
 router.get('/me', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -158,18 +164,61 @@ router.get('/me', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true
+    let user;
+
+    // Try Clerk token first
+    try {
+      const payload = await verifyToken(token, {
+        secretKey: process.env.CLERK_SECRET_KEY!
+      });
+      const clerkUserId = payload.sub;
+
+      // Find user by clerkId or create/link
+      user = await prisma.user.findFirst({
+        where: { clerkId: clerkUserId },
+        select: { id: true, email: true, name: true, role: true, createdAt: true, clerkId: true }
+      });
+
+      // If no user with clerkId, get Clerk user info and create/link
+      if (!user && clerkUserId) {
+        const clerkUser = await clerk.users.getUser(clerkUserId);
+        const email = clerkUser.emailAddresses[0]?.emailAddress;
+
+        if (email) {
+          // Check if user exists by email
+          user = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, email: true, name: true, role: true, createdAt: true, clerkId: true }
+          });
+
+          if (user) {
+            // Link to Clerk
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { clerkId: clerkUserId }
+            });
+          } else {
+            // Create new user
+            user = await prisma.user.create({
+              data: {
+                email,
+                name: clerkUser.firstName ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim() : email,
+                clerkId: clerkUserId,
+                passwordHash: ''
+              },
+              select: { id: true, email: true, name: true, role: true, createdAt: true, clerkId: true }
+            });
+          }
+        }
       }
-    });
+    } catch {
+      // Fallback to legacy JWT
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+      user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, email: true, name: true, role: true, createdAt: true, clerkId: true }
+      });
+    }
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });

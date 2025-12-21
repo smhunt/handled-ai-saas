@@ -21,14 +21,16 @@ model User {
   name          String
   role          UserRole  @default(OWNER)
   emailVerified Boolean   @default(false)
+  clerkId       String?   @unique
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   // Relations
   businesses    BusinessUser[]
   sessions      Session[]
-  
+
   @@index([email])
+  @@index([clerkId])
 }
 
 model Session {
@@ -84,7 +86,10 @@ model Business {
   planExpiresAt   DateTime?
   stripeCustomerId String?
   stripeSubscriptionId String?
-  
+
+  // Status
+  isActive        Boolean  @default(true)
+
   // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

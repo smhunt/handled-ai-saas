@@ -1,56 +1,89 @@
-// Auth Middleware - JWT verification
+// Auth Middleware - Clerk JWT verification
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { verifyToken, createClerkClient } from '@clerk/backend';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// Initialize Clerk client for user lookups
+const clerk = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY!
+});
 
 export interface AuthRequest extends Request {
   userId?: string;
   user?: any;
+  clerkUserId?: string;
 }
 
 export async function authMiddleware(
-  req: AuthRequest, 
-  res: Response, 
+  req: AuthRequest,
+  res: Response,
   next: NextFunction
 ) {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
     const token = authHeader.replace('Bearer ', '');
 
-    // Verify JWT
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-
-    // Check session exists and is valid
-    const session = await prisma.session.findFirst({
-      where: {
-        token,
-        userId: decoded.userId,
-        expiresAt: { gt: new Date() }
-      }
+    // Verify Clerk JWT
+    const payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY!
     });
+    const clerkUserId = payload.sub;
 
-    if (!session) {
-      return res.status(401).json({ error: 'Session expired or invalid' });
+    if (!clerkUserId) {
+      return res.status(401).json({ error: 'Invalid token' });
     }
 
-    // Get user
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+    // Get or create user from Clerk ID
+    let user = await prisma.user.findFirst({
+      where: { clerkId: clerkUserId },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true
+        role: true,
+        clerkId: true
       }
     });
+
+    // If no user with clerkId, try to get Clerk user info and create/link
+    if (!user) {
+      const clerkUser = await clerk.users.getUser(clerkUserId);
+      const email = clerkUser.emailAddresses[0]?.emailAddress;
+
+      if (email) {
+        // Check if user exists by email (migrating from old auth)
+        user = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true, email: true, name: true, role: true, clerkId: true }
+        });
+
+        if (user) {
+          // Link existing user to Clerk
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { clerkId: clerkUserId }
+          });
+        } else {
+          // Create new user
+          user = await prisma.user.create({
+            data: {
+              email,
+              name: clerkUser.firstName ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim() : email,
+              clerkId: clerkUserId,
+              passwordHash: '' // Not used with Clerk auth
+            },
+            select: { id: true, email: true, name: true, role: true, clerkId: true }
+          });
+        }
+      }
+    }
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -58,16 +91,14 @@ export async function authMiddleware(
 
     req.userId = user.id;
     req.user = user;
+    req.clerkUserId = clerkUserId;
 
     next();
-  } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
+  } catch (error: any) {
+    console.error('Auth middleware error:', error?.message || error);
+    if (error?.message?.includes('token')) {
       return res.status(401).json({ error: 'Invalid token' });
     }
-    if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({ error: 'Token expired' });
-    }
-    console.error('Auth middleware error:', error);
     res.status(500).json({ error: 'Authentication failed' });
   }
 }
