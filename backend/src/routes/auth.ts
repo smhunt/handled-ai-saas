@@ -10,6 +10,7 @@ const router = Router();
 const prisma = new PrismaClient();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const SUPER_ADMIN_EMAILS = (process.env.SUPER_ADMIN_EMAILS || 'admin@handled.ai').split(',');
 
 // Validation schemas
 const signupSchema = z.object({
@@ -116,7 +117,8 @@ router.post('/login', async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        name: user.name
+        name: user.name,
+        isSuperAdmin: SUPER_ADMIN_EMAILS.includes(user.email)
       },
       businesses: businesses.map(bu => ({
         id: bu.business.id,
@@ -179,7 +181,10 @@ router.get('/me', async (req, res) => {
     });
 
     res.json({
-      user,
+      user: {
+        ...user,
+        isSuperAdmin: SUPER_ADMIN_EMAILS.includes(user.email)
+      },
       businesses: businesses.map(bu => ({
         id: bu.business.id,
         name: bu.business.name,

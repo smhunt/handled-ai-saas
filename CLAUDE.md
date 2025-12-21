@@ -28,6 +28,12 @@ git worktree remove <worktree-path>
 - `backend/` - Express API server (TypeScript)
 - `dashboard/` - React admin dashboard (Vite + TypeScript)
 - `widget/` - Embeddable chat widget
+- `.claude/design-refs/` - Design references for UI work
+
+## Design References
+
+When working on UI, check `.claude/design-refs/` for inspiration:
+- [admin-panel.md](.claude/design-refs/admin-panel.md) - Stripe-inspired dashboard design
 
 ## Common Commands
 
