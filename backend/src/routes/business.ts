@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { authMiddleware } from '../middleware/auth';
 import { checkUsageLimit, checkBusinessActive } from '../middleware/usageLimits';
+import { sendTeamInvitationEmail } from '../services/notifications';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -631,8 +632,19 @@ router.post('/:id/team/invite', checkUsageLimit('teamMembers'), async (req, res)
     const { id } = req.params;
     const { email, role } = req.body;
 
+    // Get business name for invitation email
+    const business = await prisma.business.findUnique({
+      where: { id },
+      select: { name: true }
+    });
+
+    if (!business) {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+
     // Check if user exists
     let user = await prisma.user.findUnique({ where: { email } });
+    let isNewUser = false;
 
     if (!user) {
       // Create invited user with temp password (they'll need to reset)
@@ -646,7 +658,7 @@ router.post('/:id/team/invite', checkUsageLimit('teamMembers'), async (req, res)
           role: role || 'STAFF'
         }
       });
-      // TODO: Send invitation email
+      isNewUser = true;
     }
 
     // Check if already a member
@@ -668,6 +680,11 @@ router.post('/:id/team/invite', checkUsageLimit('teamMembers'), async (req, res)
         user: { select: { id: true, email: true, name: true } }
       }
     });
+
+    // Send invitation email to new users
+    if (isNewUser) {
+      sendTeamInvitationEmail(email, user.id, business.name, role || 'STAFF');
+    }
 
     res.status(201).json({ member });
   } catch (error) {
