@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   SignIn,
@@ -1627,6 +1627,17 @@ function SettingsPage() {
   const { business } = useBusiness()
   const { getToken } = useClerkAuth()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Get active tab from URL or default to 'business'
+  const activeTab = searchParams.get('tab') || 'business'
+  const validTabs = ['business', 'services', 'menu', 'faqs', 'team', 'locations', 'widget', 'ai', 'billing']
+  const currentTab = validTabs.includes(activeTab) ? activeTab : 'business'
+
+  // Update URL when tab changes
+  const handleTabChange = (value: string) => {
+    setSearchParams({ tab: value }, { replace: false })
+  }
 
   // Services data
   const { data: servicesData } = useQuery({
@@ -1923,7 +1934,7 @@ function SettingsPage() {
         <p className="text-stone-600">Manage your business and AI settings</p>
       </div>
 
-      <Tabs defaultValue="business">
+      <Tabs value={currentTab} onValueChange={handleTabChange}>
         <TabsList className="flex flex-wrap gap-1">
           <TabsTrigger value="business"><Building2 className="w-4 h-4 mr-2" />Business</TabsTrigger>
           <TabsTrigger value="services"><Briefcase className="w-4 h-4 mr-2" />Services</TabsTrigger>
