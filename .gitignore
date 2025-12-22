@@ -30,3 +30,9 @@ coverage/
 # Misc
 *.tsbuildinfo
 .turbo/
+
+# Local databases
+*.db
+
+# Media
+videos/
