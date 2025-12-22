@@ -76,6 +76,11 @@ model Business {
   widgetPosition  WidgetPosition @default(BOTTOM_RIGHT)
   widgetGreeting  String   @default("Hi! How can I help you today?")
   widgetOfflineMessage String @default("We're currently offline. Leave a message and we'll get back to you!")
+
+  // Mobile config settings
+  allowFullScreenChat Boolean @default(true)
+  showFloatingButton  Boolean @default(true)
+  hideOnScroll        Boolean @default(false)
   
   // AI Settings
   aiPersonality   String   @default("friendly and professional")
