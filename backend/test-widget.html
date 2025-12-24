@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mario's Italian Kitchen - Widget Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f9fafb;
+    }
+    h1 { color: #1f2937; }
+    .info {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .info h2 { color: #f97316; margin-top: 0; }
+    code {
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .tips {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 12px 16px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Mario's Italian Kitchen</h1>
+
+  <div class="info">
+    <h2>Widget Test Page</h2>
+    <p>The chat widget should appear in the bottom-right corner.</p>
+    <p>Click the orange chat button to start a conversation with the AI assistant.</p>
+  </div>
+
+  <div class="info">
+    <h3>Try asking:</h3>
+    <ul>
+      <li>"What's on the menu?"</li>
+      <li>"I'd like to make a reservation for 4 people tomorrow at 7pm"</li>
+      <li>"What are your hours?"</li>
+      <li>"Do you have vegetarian options?"</li>
+      <li>"I want to order a Margherita pizza for pickup"</li>
+    </ul>
+  </div>
+
+  <div class="tips">
+    <strong>Note:</strong> This widget is connected to the local API at <code>https://dev.ecoworks.ca:3084</code>
+  </div>
+
+  <!-- Handled Chat Widget -->
+  <script src="http://localhost:5500/widget.js"
+          data-api-key="hnd_demo_MqpZJwc7KCfXDleS2suhBmJC"
+          data-api-url="https://localhost:3084"></script>
+</body>
+</html>

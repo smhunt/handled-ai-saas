@@ -300,27 +300,45 @@ router.post('/conversations/:conversationId/messages', async (req, res) => {
       return res.status(404).json({ error: 'Conversation not found' });
     }
 
-    // If conversation was handed off, queue for human
+    // Check if user wants to return to AI
+    const returnToAiPhrases = ['talk to ai', 'talk to bot', 'go back', 'return to assistant', 'back to ai', 'ai help', 'restart'];
+    const wantsToReturnToAi = returnToAiPhrases.some(phrase => content.toLowerCase().includes(phrase));
+
+    // If conversation was handed off, check if user wants to return to AI
     if (conversation.handedOffToHuman) {
-      // Save message but don't process with AI
-      const message = await prisma.message.create({
-        data: {
-          conversationId,
-          role: 'USER',
-          content
-        }
-      });
+      if (wantsToReturnToAi) {
+        // Reset handoff and continue with AI
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: {
+            handedOffToHuman: false,
+            status: 'ACTIVE',
+            lastMessageAt: new Date()
+          }
+        });
+        // Continue to AI processing below
+      } else {
+        // Still handed off - queue for human
+        const message = await prisma.message.create({
+          data: {
+            conversationId,
+            role: 'USER',
+            content
+          }
+        });
 
-      await prisma.conversation.update({
-        where: { id: conversationId },
-        data: { lastMessageAt: new Date() }
-      });
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: { lastMessageAt: new Date() }
+        });
 
-      return res.json({
-        message,
-        response: "I've passed your message to our team. Someone will respond shortly.",
-        handedOff: true
-      });
+        return res.json({
+          message,
+          response: "I've passed your message to our team. Someone will respond shortly.",
+          handedOff: true,
+          quickReplies: ['Talk to AI assistant', 'Start new conversation']
+        });
+      }
     }
 
     // Process with AI
@@ -341,15 +359,75 @@ router.post('/conversations/:conversationId/messages', async (req, res) => {
       }
     });
 
+    // Generate contextual quick replies based on response
+    const quickReplies = generateQuickReplies(aiResponse, content);
+
     res.json({
       response: aiResponse,
-      handedOff: false
+      handedOff: false,
+      quickReplies
     });
   } catch (error) {
     console.error('Send message error:', error);
     res.status(500).json({ error: 'Failed to process message' });
   }
 });
+
+// Generate quick reply suggestions based on AI response
+function generateQuickReplies(response: string, userMessage: string): string[] {
+  const replies: string[] = [];
+  const lowerResponse = response.toLowerCase();
+  const lowerMessage = userMessage.toLowerCase();
+
+  // FIRST: Check if booking/order was already confirmed (highest priority)
+  if (lowerResponse.includes('confirmation code') || lowerResponse.includes('order #') ||
+      lowerResponse.includes('order number') || lowerResponse.includes('booking confirmed') ||
+      lowerResponse.includes('appointment confirmed') || lowerResponse.includes('order confirmed') ||
+      (lowerResponse.includes('confirmed') && lowerResponse.includes('hnd'))) {
+    replies.push('Thank you!', 'Book another', 'Ask a question');
+    return replies;
+  }
+
+  // If asking about time preferences
+  if (lowerResponse.includes('what time') || lowerResponse.includes('which time') ||
+      lowerResponse.includes('available times') || lowerResponse.includes('available slots')) {
+    // Extract times from response (e.g., "10:00 AM", "2:30 PM")
+    const timeMatches = response.match(/\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)/g);
+    if (timeMatches && timeMatches.length > 0) {
+      return timeMatches.slice(0, 4); // Return up to 4 time options
+    }
+  }
+
+  // If asking for confirmation (but NOT already confirmed)
+  if ((lowerResponse.includes('would you like') || lowerResponse.includes('shall i') ||
+      lowerResponse.includes('do you want') || lowerResponse.includes('ready to confirm')) &&
+      !lowerResponse.includes('confirmation code')) {
+    if (lowerResponse.includes('book') || lowerResponse.includes('reservation') || lowerResponse.includes('appointment')) {
+      replies.push('Yes, book it!', 'Change the time', 'Cancel');
+    } else if (lowerResponse.includes('order')) {
+      replies.push('Yes, confirm order', 'Add more items', 'Cancel order');
+    } else {
+      replies.push('Yes', 'No', 'Tell me more');
+    }
+    return replies;
+  }
+
+  // If showing menu or services
+  if (lowerResponse.includes('menu') || lowerResponse.includes('services') ||
+      lowerResponse.includes('offer') || lowerResponse.includes('pricing')) {
+    replies.push('Book appointment', 'Tell me more', 'What are your hours?');
+    return replies;
+  }
+
+  // If greeting or start of conversation
+  if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey')) {
+    replies.push('Book appointment', 'View services', 'What are your hours?');
+    return replies;
+  }
+
+  // Default - no quick replies
+  return [];
+}
 
 // Get conversation history
 router.get('/conversations/:conversationId/messages', async (req, res) => {

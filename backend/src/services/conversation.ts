@@ -479,11 +479,15 @@ IMPORTANT GUIDELINES:
     const startTime = new Date(date);
     startTime.setHours(hours, minutes, 0, 0);
 
-    // Assume 1 hour duration for restaurants, or use service duration
+    // Validate service exists and get duration
     let duration = 60;
+    let validServiceId: string | null = null;
     if (serviceId) {
       const service = await prisma.service.findUnique({ where: { id: serviceId } });
-      if (service) duration = service.duration;
+      if (service) {
+        duration = service.duration;
+        validServiceId = service.id;
+      }
     }
     const endTime = addMinutes(startTime, duration);
 
@@ -498,7 +502,7 @@ IMPORTANT GUIDELINES:
         startTime,
         endTime,
         partySize,
-        serviceId: serviceId || null,
+        serviceId: validServiceId,
         notes: notes || null,
         confirmationCode,
         status: 'CONFIRMED',
