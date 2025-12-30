@@ -3,9 +3,9 @@
 ## Widget Improvements
 
 ### High Priority
-- [ ] **Markdown rendering** - Parse and render **bold**, *italic*, lists, etc. in chat messages
-- [ ] **Clickable quick replies** - Add button chips for common choices (e.g., time slots, services, menu items)
-- [ ] **Better message formatting** - Line breaks, bullet points, proper spacing for confirmations
+- [x] **Markdown rendering** - Parse and render **bold**, *italic*, lists, etc. in chat messages ✅ Dec 23
+- [x] **Clickable quick replies** - Add button chips for common choices (e.g., time slots, services, menu items) ✅ Dec 23
+- [x] **Better message formatting** - Line breaks, bullet points, proper spacing for confirmations ✅ Dec 23
 
 ### Medium Priority
 - [ ] **Typing indicator improvements** - Show business name typing, not just dots
