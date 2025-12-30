@@ -13,10 +13,13 @@ export default defineConfig({
     },
   },
   server: {
+    port: 3003,
+    strictPort: true,
     https: {
       key: fs.readFileSync(path.join(certPath, "key.pem")),
       cert: fs.readFileSync(path.join(certPath, "cert.pem")),
     },
     host: true,
+    allowedHosts: [".dev.ecoworks.ca", "localhost"],
   },
 });

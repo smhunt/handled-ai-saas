@@ -18,7 +18,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5403:5432"  # Slot 03 - Database
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U handled"]
       interval: 10s
@@ -54,7 +54,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      PORT: 3001
+      PORT: 3103
       DATABASE_URL: postgresql://handled:${DB_PASSWORD:-handledpassword}@postgres:5432/handled
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
@@ -71,14 +71,14 @@ services:
       APP_URL: ${APP_URL:-http://localhost:3000}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     ports:
-      - "3001:3001"
+      - "3103:3103"  # Slot 03 - Backend API
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3103/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -91,11 +91,11 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${API_URL:-http://localhost:3001}
+        VITE_API_URL: ${API_URL:-https://dev.ecoworks.ca:3103}
     container_name: handled-dashboard
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "3003:80"  # Slot 03 - Dashboard Frontend
     depends_on:
       - api
 
@@ -163,13 +163,13 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-handled123}
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3003}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://dev.ecoworks.ca:3303}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3003:3000"
+      - "3303:3000"  # Slot 03 - Grafana
     depends_on:
       - prometheus
     profiles:

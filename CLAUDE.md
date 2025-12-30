@@ -32,6 +32,22 @@ Handled AI is a multi-tenant SaaS platform providing AI-powered booking and orde
 └── .claude/design-refs/   # UI design references (Stripe-inspired)
 ```
 
+## Ports (Slot 03)
+
+| Service | Port | Formula |
+|---------|------|---------|
+| Dashboard | 3003 | 30XX |
+| Backend API | 3103 | 31XX |
+| Grafana | 3303 | 33XX |
+| Database | 5403 | 54XX |
+
+See `~/.claude/PORTS.md` for full registry and `.env.ports` for this project's allocation.
+
+## Access URLs
+
+- **Dashboard:** https://handled.dev.ecoworks.ca (port 3003)
+- **API:** https://api.handled.dev.ecoworks.ca (port 3103)
+
 ## Commands
 
 ```bash

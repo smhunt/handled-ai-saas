@@ -124,7 +124,7 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3103;
 
 server.listen(PORT, () => {
   console.log(`🚀 Handled API running on port ${PORT} (${useHttps ? 'HTTPS' : 'HTTP'})`);
