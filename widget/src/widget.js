@@ -337,6 +337,43 @@
         white-space: pre-wrap;
       }
 
+      /* Message Grouping - consecutive messages from same sender */
+      .handled-message-grouped {
+        margin-top: -8px;
+      }
+
+      .handled-message-grouped .handled-message-time {
+        display: none;
+      }
+
+      /* User message grouping - adjust corners for visual continuity */
+      .handled-message-user.handled-message-group-start {
+        border-bottom-right-radius: 4px;
+      }
+
+      .handled-message-user.handled-message-group-middle {
+        border-top-right-radius: 4px;
+        border-bottom-right-radius: 4px;
+      }
+
+      .handled-message-user.handled-message-group-end {
+        border-top-right-radius: 4px;
+      }
+
+      /* Assistant message grouping */
+      .handled-message-assistant.handled-message-group-start {
+        border-bottom-left-radius: 4px;
+      }
+
+      .handled-message-assistant.handled-message-group-middle {
+        border-top-left-radius: 4px;
+        border-bottom-left-radius: 4px;
+      }
+
+      .handled-message-assistant.handled-message-group-end {
+        border-top-left-radius: 4px;
+      }
+
       .handled-quick-replies {
         display: flex;
         flex-wrap: wrap;
@@ -900,6 +937,10 @@
     const existingReplies = container.querySelector('.handled-quick-replies');
     if (existingReplies) existingReplies.remove();
 
+    // Check if this message should be grouped with the previous one
+    const prevMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+    const isGrouped = prevMessage && prevMessage.role === message.role;
+
     // Check if this is a confirmation message that should be rendered as a card
     const confirmationType = message.role === 'ASSISTANT'
       ? detectConfirmationType(message.content)
@@ -908,7 +949,7 @@
     const div = document.createElement('div');
 
     if (confirmationType) {
-      // Render as a rich card
+      // Render as a rich card (cards don't participate in grouping)
       div.innerHTML = renderConfirmationCard(message.content, confirmationType);
     } else {
       // Use markdown parsing for assistant messages, plain text for user
@@ -916,11 +957,33 @@
         ? parseMarkdown(message.content)
         : escapeHtml(message.content);
 
-      div.className = `handled-message handled-message-${message.role.toLowerCase()}`;
+      // Build class list with grouping
+      let classes = `handled-message handled-message-${message.role.toLowerCase()}`;
+      if (isGrouped) {
+        classes += ' handled-message-grouped handled-message-group-end';
+      }
+
+      div.className = classes;
       div.innerHTML = `
         <div class="handled-message-content">${content}</div>
         <div class="handled-message-time">${formatTime(message.createdAt)}</div>
       `;
+
+      // Update previous message's grouping class if this is grouped
+      if (isGrouped) {
+        const allMessages = container.querySelectorAll('.handled-message');
+        const prevDiv = allMessages[allMessages.length - 1];
+        if (prevDiv) {
+          // Update previous message from standalone/end to start/middle
+          if (prevDiv.classList.contains('handled-message-group-end')) {
+            prevDiv.classList.remove('handled-message-group-end');
+            prevDiv.classList.add('handled-message-group-middle');
+          } else if (!prevDiv.classList.contains('handled-message-group-start') &&
+                     !prevDiv.classList.contains('handled-message-group-middle')) {
+            prevDiv.classList.add('handled-message-group-start');
+          }
+        }
+      }
     }
 
     container.insertBefore(div, typing);
