@@ -8,7 +8,7 @@
 - [x] **Better message formatting** - Line breaks, bullet points, proper spacing for confirmations ✅ Dec 23
 
 ### Medium Priority
-- [ ] **Typing indicator improvements** - Show business name typing, not just dots
+- [x] **Typing indicator improvements** - Show business name typing, not just dots ✅ Dec 30
 - [ ] **Message grouping** - Group consecutive messages from same sender
 - [x] **Rich cards** - Display booking confirmations and order summaries as styled cards ✅ Dec 30
 - [ ] **Image support** - Show menu item images, business logo in header

@@ -511,21 +511,35 @@
 
       #handled-widget-typing {
         align-self: flex-start;
-        padding: 12px 16px;
+        padding: 10px 14px;
         background: white;
         border: 1px solid #e5e7eb;
         border-radius: 16px;
+        border-bottom-left-radius: 4px;
         display: none;
+        align-items: center;
+        gap: 8px;
       }
 
       #handled-widget-typing.visible {
         display: flex;
-        gap: 4px;
+      }
+
+      #handled-widget-typing-text {
+        font-size: 13px;
+        color: #6b7280;
+        font-weight: 500;
+      }
+
+      .handled-typing-dots {
+        display: flex;
+        gap: 3px;
+        align-items: center;
       }
 
       .handled-typing-dot {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         background: #9ca3af;
         border-radius: 50%;
         animation: handled-typing 1.4s infinite;
@@ -536,7 +550,7 @@
 
       @keyframes handled-typing {
         0%, 60%, 100% { transform: translateY(0); }
-        30% { transform: translateY(-4px); }
+        30% { transform: translateY(-3px); }
       }
 
       #handled-widget-input-container {
@@ -639,7 +653,7 @@
             </svg>
           </div>
           <div id="handled-widget-header-info">
-            <div id="handled-widget-header-name">${businessConfig?.name || 'Chat'}</div>
+            <div id="handled-widget-header-name">${businessConfig?.businessName || 'Chat'}</div>
             <div id="handled-widget-header-status">Online now</div>
           </div>
           <button id="handled-widget-close" aria-label="Close chat">
@@ -652,9 +666,12 @@
 
         <div id="handled-widget-messages">
           <div id="handled-widget-typing">
-            <span class="handled-typing-dot"></span>
-            <span class="handled-typing-dot"></span>
-            <span class="handled-typing-dot"></span>
+            <span id="handled-widget-typing-text">typing</span>
+            <span class="handled-typing-dots">
+              <span class="handled-typing-dot"></span>
+              <span class="handled-typing-dot"></span>
+              <span class="handled-typing-dot"></span>
+            </span>
           </div>
         </div>
 
@@ -961,7 +978,14 @@
   }
 
   function showTyping() {
-    document.getElementById('handled-widget-typing').classList.add('visible');
+    const typingEl = document.getElementById('handled-widget-typing');
+    const typingText = document.getElementById('handled-widget-typing-text');
+
+    // Set the business name in the typing indicator
+    const businessName = businessConfig?.businessName || 'Assistant';
+    typingText.textContent = `${businessName} is typing`;
+
+    typingEl.classList.add('visible');
     scrollToBottom();
   }
 
@@ -1109,7 +1133,7 @@
     const isBooking = type === 'booking';
     const icon = isBooking ? '📅' : '🛒';
     const title = isBooking ? 'Booking Confirmed' : 'Order Confirmed';
-    const businessName = businessConfig?.name || 'Business';
+    const businessName = businessConfig?.businessName || 'Business';
 
     let cardHtml = `
       <div class="handled-card">
