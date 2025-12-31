@@ -362,6 +362,153 @@
         color: white;
       }
 
+      /* Rich Confirmation Cards */
+      .handled-card {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+        max-width: 90%;
+        align-self: flex-start;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+
+      .handled-card-header {
+        background: linear-gradient(135deg, var(--handled-primary), var(--handled-primary-dark));
+        color: white;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .handled-card-header-icon {
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+      }
+
+      .handled-card-header-text {
+        flex: 1;
+      }
+
+      .handled-card-header-title {
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .handled-card-header-subtitle {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+
+      .handled-card-body {
+        padding: 16px;
+      }
+
+      .handled-card-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #f3f4f6;
+      }
+
+      .handled-card-row:last-child {
+        border-bottom: none;
+      }
+
+      .handled-card-label {
+        color: #6b7280;
+        font-size: 13px;
+      }
+
+      .handled-card-value {
+        color: #1f2937;
+        font-weight: 500;
+        font-size: 13px;
+        text-align: right;
+      }
+
+      .handled-card-confirmation {
+        background: #f0fdf4;
+        border: 1px dashed #22c55e;
+        border-radius: 8px;
+        padding: 12px;
+        margin-top: 12px;
+        text-align: center;
+      }
+
+      .handled-card-confirmation-label {
+        font-size: 11px;
+        color: #16a34a;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+      }
+
+      .handled-card-confirmation-code {
+        font-size: 18px;
+        font-weight: 700;
+        color: #15803d;
+        font-family: 'SF Mono', Monaco, monospace;
+      }
+
+      .handled-card-footer {
+        background: #f9fafb;
+        padding: 12px 16px;
+        font-size: 12px;
+        color: #6b7280;
+        border-top: 1px solid #e5e7eb;
+      }
+
+      .handled-card-items {
+        margin: 8px 0;
+      }
+
+      .handled-card-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        font-size: 13px;
+      }
+
+      .handled-card-item-name {
+        color: #374151;
+      }
+
+      .handled-card-item-qty {
+        color: #6b7280;
+        margin-left: 4px;
+      }
+
+      .handled-card-item-price {
+        color: #1f2937;
+        font-weight: 500;
+      }
+
+      .handled-card-total {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0 0;
+        margin-top: 8px;
+        border-top: 2px solid #e5e7eb;
+        font-weight: 600;
+      }
+
+      .handled-card-total-label {
+        color: #374151;
+      }
+
+      .handled-card-total-value {
+        color: var(--handled-primary);
+        font-size: 16px;
+      }
+
       #handled-widget-typing {
         align-self: flex-start;
         padding: 12px 16px;
@@ -736,17 +883,28 @@
     const existingReplies = container.querySelector('.handled-quick-replies');
     if (existingReplies) existingReplies.remove();
 
-    // Use markdown parsing for assistant messages, plain text for user
-    const content = message.role === 'ASSISTANT'
-      ? parseMarkdown(message.content)
-      : escapeHtml(message.content);
+    // Check if this is a confirmation message that should be rendered as a card
+    const confirmationType = message.role === 'ASSISTANT'
+      ? detectConfirmationType(message.content)
+      : null;
 
     const div = document.createElement('div');
-    div.className = `handled-message handled-message-${message.role.toLowerCase()}`;
-    div.innerHTML = `
-      <div class="handled-message-content">${content}</div>
-      <div class="handled-message-time">${formatTime(message.createdAt)}</div>
-    `;
+
+    if (confirmationType) {
+      // Render as a rich card
+      div.innerHTML = renderConfirmationCard(message.content, confirmationType);
+    } else {
+      // Use markdown parsing for assistant messages, plain text for user
+      const content = message.role === 'ASSISTANT'
+        ? parseMarkdown(message.content)
+        : escapeHtml(message.content);
+
+      div.className = `handled-message handled-message-${message.role.toLowerCase()}`;
+      div.innerHTML = `
+        <div class="handled-message-content">${content}</div>
+        <div class="handled-message-time">${formatTime(message.createdAt)}</div>
+      `;
+    }
 
     container.insertBefore(div, typing);
     messages.push(message);
@@ -839,6 +997,220 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ============================================
+  // RICH CARD DETECTION & RENDERING
+  // ============================================
+
+  function detectConfirmationType(text) {
+    const lower = text.toLowerCase();
+
+    // Check for booking confirmation
+    if ((lower.includes('booking') || lower.includes('appointment') || lower.includes('reservation')) &&
+        (lower.includes('confirmed') || lower.includes('confirmation') || lower.match(/hnd-[a-z0-9]+/i))) {
+      return 'booking';
+    }
+
+    // Check for order confirmation
+    if ((lower.includes('order') && !lower.includes('order to')) &&
+        (lower.includes('confirmed') || lower.includes('confirmation') || lower.match(/order\s*#?\s*\d+/i))) {
+      return 'order';
+    }
+
+    return null;
+  }
+
+  function parseConfirmationDetails(text, type) {
+    const details = {};
+    const lines = text.split('\n');
+
+    // Extract confirmation code (HND-XXXX format or Order #XXX)
+    const codeMatch = text.match(/(?:confirmation\s*(?:code|number|#)?:?\s*|order\s*#?\s*)([A-Z0-9-]+)/i);
+    if (codeMatch) {
+      details.confirmationCode = codeMatch[1].toUpperCase();
+    }
+
+    // Extract date
+    const datePatterns = [
+      /(?:date|on|for)[:\s]+([A-Za-z]+(?:day)?,?\s+[A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+      /([A-Za-z]+(?:day)?,?\s+[A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)/i,
+      /(\d{1,2}\/\d{1,2}\/\d{2,4})/
+    ];
+    for (const pattern of datePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        details.date = match[1].trim();
+        break;
+      }
+    }
+
+    // Extract time
+    const timeMatch = text.match(/(?:at|time)[:\s]+(\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)?)/i) ||
+                      text.match(/(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)/i);
+    if (timeMatch) {
+      details.time = timeMatch[1].trim();
+    }
+
+    // Extract service/treatment name
+    const servicePatterns = [
+      /(?:service|treatment|for)[:\s]+([^\n,]+?)(?:\s+on|\s+at|\s+for|\n|$)/i,
+      /(?:booked|scheduled)[:\s]+(?:a\s+)?([^\n,]+?)(?:\s+on|\s+at|\s+for|\n|$)/i
+    ];
+    for (const pattern of servicePatterns) {
+      const match = text.match(pattern);
+      if (match && match[1].length < 50) {
+        details.service = match[1].trim();
+        break;
+      }
+    }
+
+    // Extract party size for restaurant bookings
+    const partyMatch = text.match(/(?:party\s+(?:of|size)|for)\s+(\d+)\s*(?:people|guests|persons)?/i) ||
+                       text.match(/(\d+)\s*(?:people|guests|persons)/i);
+    if (partyMatch) {
+      details.partySize = partyMatch[1];
+    }
+
+    // Extract stylist/provider name
+    const providerMatch = text.match(/(?:with|stylist|provider|by)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+    if (providerMatch) {
+      details.provider = providerMatch[1];
+    }
+
+    // For orders, try to extract items and total
+    if (type === 'order') {
+      const items = [];
+      const itemPattern = /[-•]\s*(.+?)\s*(?:x\s*(\d+)|(\d+)\s*x)?\s*[-–]\s*\$?([\d.]+)/gi;
+      let match;
+      while ((match = itemPattern.exec(text)) !== null) {
+        items.push({
+          name: match[1].trim(),
+          quantity: match[2] || match[3] || '1',
+          price: match[4]
+        });
+      }
+      if (items.length > 0) {
+        details.items = items;
+      }
+
+      // Extract total
+      const totalMatch = text.match(/total[:\s]+\$?([\d.]+)/i);
+      if (totalMatch) {
+        details.total = totalMatch[1];
+      }
+    }
+
+    return details;
+  }
+
+  function renderConfirmationCard(text, type) {
+    const details = parseConfirmationDetails(text, type);
+    const isBooking = type === 'booking';
+    const icon = isBooking ? '📅' : '🛒';
+    const title = isBooking ? 'Booking Confirmed' : 'Order Confirmed';
+    const businessName = businessConfig?.name || 'Business';
+
+    let cardHtml = `
+      <div class="handled-card">
+        <div class="handled-card-header">
+          <div class="handled-card-header-icon">${icon}</div>
+          <div class="handled-card-header-text">
+            <div class="handled-card-header-title">${escapeHtml(title)}</div>
+            <div class="handled-card-header-subtitle">${escapeHtml(businessName)}</div>
+          </div>
+        </div>
+        <div class="handled-card-body">
+    `;
+
+    if (isBooking) {
+      // Booking card details
+      if (details.service) {
+        cardHtml += `
+          <div class="handled-card-row">
+            <span class="handled-card-label">Service</span>
+            <span class="handled-card-value">${escapeHtml(details.service)}</span>
+          </div>
+        `;
+      }
+      if (details.date) {
+        cardHtml += `
+          <div class="handled-card-row">
+            <span class="handled-card-label">Date</span>
+            <span class="handled-card-value">${escapeHtml(details.date)}</span>
+          </div>
+        `;
+      }
+      if (details.time) {
+        cardHtml += `
+          <div class="handled-card-row">
+            <span class="handled-card-label">Time</span>
+            <span class="handled-card-value">${escapeHtml(details.time)}</span>
+          </div>
+        `;
+      }
+      if (details.partySize) {
+        cardHtml += `
+          <div class="handled-card-row">
+            <span class="handled-card-label">Party Size</span>
+            <span class="handled-card-value">${escapeHtml(details.partySize)} guests</span>
+          </div>
+        `;
+      }
+      if (details.provider) {
+        cardHtml += `
+          <div class="handled-card-row">
+            <span class="handled-card-label">With</span>
+            <span class="handled-card-value">${escapeHtml(details.provider)}</span>
+          </div>
+        `;
+      }
+    } else {
+      // Order card details
+      if (details.items && details.items.length > 0) {
+        cardHtml += `<div class="handled-card-items">`;
+        details.items.forEach(item => {
+          cardHtml += `
+            <div class="handled-card-item">
+              <span>
+                <span class="handled-card-item-name">${escapeHtml(item.name)}</span>
+                <span class="handled-card-item-qty">x${item.quantity}</span>
+              </span>
+              <span class="handled-card-item-price">$${item.price}</span>
+            </div>
+          `;
+        });
+        cardHtml += `</div>`;
+      }
+      if (details.total) {
+        cardHtml += `
+          <div class="handled-card-total">
+            <span class="handled-card-total-label">Total</span>
+            <span class="handled-card-total-value">$${escapeHtml(details.total)}</span>
+          </div>
+        `;
+      }
+    }
+
+    // Confirmation code
+    if (details.confirmationCode) {
+      cardHtml += `
+        <div class="handled-card-confirmation">
+          <div class="handled-card-confirmation-label">Confirmation Code</div>
+          <div class="handled-card-confirmation-code">${escapeHtml(details.confirmationCode)}</div>
+        </div>
+      `;
+    }
+
+    cardHtml += `
+        </div>
+        <div class="handled-card-footer">
+          You'll receive a confirmation email shortly.
+        </div>
+      </div>
+    `;
+
+    return cardHtml;
   }
 
   function parseMarkdown(text) {

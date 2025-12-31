@@ -10,7 +10,7 @@
 ### Medium Priority
 - [ ] **Typing indicator improvements** - Show business name typing, not just dots
 - [ ] **Message grouping** - Group consecutive messages from same sender
-- [ ] **Rich cards** - Display booking confirmations and order summaries as styled cards
+- [x] **Rich cards** - Display booking confirmations and order summaries as styled cards ✅ Dec 30
 - [ ] **Image support** - Show menu item images, business logo in header
 
 ### Low Priority
