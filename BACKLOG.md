@@ -11,7 +11,7 @@
 - [x] **Typing indicator improvements** - Show business name typing, not just dots ✅ Dec 30
 - [x] **Message grouping** - Group consecutive messages from same sender ✅ Dec 30
 - [x] **Rich cards** - Display booking confirmations and order summaries as styled cards ✅ Dec 30
-- [ ] **Image support** - Show menu item images, business logo in header
+- [x] **Image support** - Show menu item images, business logo in header ✅ Dec 30
 
 ### Low Priority
 - [ ] **Sound notifications** - Optional sound when new message arrives

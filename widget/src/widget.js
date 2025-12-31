@@ -242,6 +242,13 @@
         fill: white;
       }
 
+      #handled-widget-header-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
+      }
+
       #handled-widget-header-info {
         flex: 1;
       }
@@ -335,6 +342,55 @@
 
       .handled-message-assistant .handled-message-content {
         white-space: pre-wrap;
+      }
+
+      /* Images in messages */
+      .handled-message-content img {
+        max-width: 100%;
+        border-radius: 8px;
+        margin: 8px 0;
+        display: block;
+      }
+
+      .handled-message-image {
+        max-width: 200px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .handled-message-image:hover {
+        transform: scale(1.02);
+      }
+
+      .handled-message-content a {
+        color: var(--handled-primary);
+        text-decoration: none;
+      }
+
+      .handled-message-content a:hover {
+        text-decoration: underline;
+      }
+
+      .handled-message-user .handled-message-content a {
+        color: white;
+        text-decoration: underline;
+      }
+
+      /* Image grid for multiple images */
+      .handled-image-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin: 8px 0;
+      }
+
+      .handled-image-grid img {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 8px;
+        cursor: pointer;
       }
 
       /* Message Grouping - consecutive messages from same sender */
@@ -685,9 +741,10 @@
       <div id="handled-widget-window">
         <div id="handled-widget-header">
           <div id="handled-widget-header-avatar">
-            <svg viewBox="0 0 24 24">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-            </svg>
+            ${businessConfig?.logoUrl
+              ? `<img src="${escapeHtml(businessConfig.logoUrl)}" alt="${escapeHtml(businessConfig.businessName || 'Logo')}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg viewBox="0 0 24 24" style="display:none"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>`
+              : `<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>`
+            }
           </div>
           <div id="handled-widget-header-info">
             <div id="handled-widget-header-name">${businessConfig?.businessName || 'Chat'}</div>
@@ -1303,6 +1360,18 @@
   function parseMarkdown(text) {
     // Escape HTML first for security
     let html = escapeHtml(text);
+
+    // Images: ![alt](url) - only allow http/https URLs for security
+    html = html.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g, (match, alt, url) => {
+      // Validate URL is an image-like URL (basic check)
+      const safeAlt = alt.replace(/"/g, '&quot;');
+      return `<img src="${url}" alt="${safeAlt}" class="handled-message-image" loading="lazy">`;
+    });
+
+    // Links: [text](url)
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (match, text, url) => {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    });
 
     // Bold: **text** or __text__
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
