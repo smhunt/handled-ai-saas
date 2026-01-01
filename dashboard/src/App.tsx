@@ -749,7 +749,10 @@ function ConversationsPage() {
   const [selectedConversation, setSelectedConversation] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [channelFilter, setChannelFilter] = useState<string>('ALL')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [replyMessage, setReplyMessage] = useState('')
+  const [isSending, setIsSending] = useState(false)
 
   const { data: conversationsData } = useQuery({
     queryKey: ['conversations', business?.id],
@@ -776,7 +779,14 @@ function ConversationsPage() {
 
   const allConversations = conversationsData?.conversations || []
 
-  // Filter conversations based on search and status
+  // Count conversations by channel
+  const channelCounts = {
+    ALL: allConversations.length,
+    WEB: allConversations.filter((c: any) => c.channel === 'WEB').length,
+    SMS: allConversations.filter((c: any) => c.channel === 'SMS').length
+  }
+
+  // Filter conversations based on search, status, and channel
   const conversations = allConversations.filter((conv: any) => {
     const matchesSearch = !searchQuery ||
       conv.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -785,9 +795,34 @@ function ConversationsPage() {
       conv.messages?.some((m: any) => m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
 
     const matchesStatus = statusFilter === 'ALL' || conv.status === statusFilter
+    const matchesChannel = channelFilter === 'ALL' || conv.channel === channelFilter
 
-    return matchesSearch && matchesStatus
+    return matchesSearch && matchesStatus && matchesChannel
   })
+
+  // Send SMS reply
+  const sendSMSReply = async () => {
+    if (!replyMessage.trim() || !selectedConversation?.customerPhone) return
+
+    setIsSending(true)
+    try {
+      await api('/api/conversations/sms/send', {
+        method: 'POST',
+        body: JSON.stringify({
+          to: selectedConversation.customerPhone,
+          message: replyMessage,
+          businessId: business?.id,
+          conversationId: selectedConversation.id
+        })
+      })
+      setReplyMessage('')
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    } catch (error) {
+      console.error('Failed to send SMS:', error)
+    } finally {
+      setIsSending(false)
+    }
+  }
 
   // Bulk selection helpers
   const toggleSelect = (id: string, e: React.MouseEvent) => {
@@ -849,6 +884,27 @@ function ConversationsPage() {
           </Select>
         </div>
       </div>
+
+      {/* Channel Tabs */}
+      <Tabs value={channelFilter} onValueChange={setChannelFilter} className="w-full">
+        <TabsList>
+          <TabsTrigger value="ALL" className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            All
+            <Badge variant="secondary" className="ml-1">{channelCounts.ALL}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="WEB" className="flex items-center gap-2">
+            <Globe className="w-4 h-4" />
+            Web Widget
+            <Badge variant="secondary" className="ml-1">{channelCounts.WEB}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="SMS" className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4" />
+            SMS
+            <Badge variant="secondary" className="ml-1">{channelCounts.SMS}</Badge>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Bulk Actions Bar */}
       {selectedIds.size > 0 && (
@@ -919,14 +975,26 @@ function ConversationsPage() {
                         className="flex-1 text-left"
                       >
                         <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarFallback>{conv.customerName?.[0] || 'V'}</AvatarFallback>
-                          </Avatar>
+                          <div className="relative">
+                            <Avatar>
+                              <AvatarFallback>{conv.customerName?.[0] || (conv.channel === 'SMS' ? 'S' : 'V')}</AvatarFallback>
+                            </Avatar>
+                            {conv.channel === 'SMS' && (
+                              <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-0.5">
+                                <Smartphone className="w-3 h-3 text-white" />
+                              </div>
+                            )}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
-                              <span className="font-medium truncate">{conv.customerName || 'Visitor'}</span>
+                              <span className="font-medium truncate">
+                                {conv.customerName || (conv.channel === 'SMS' ? conv.customerPhone : 'Visitor')}
+                              </span>
                               <span className="text-xs text-stone-500">{format(new Date(conv.lastMessageAt), 'h:mm a')}</span>
                             </div>
+                            {conv.channel === 'SMS' && conv.customerPhone && !conv.customerName && (
+                              <p className="text-xs text-green-600 dark:text-green-400 font-medium">SMS</p>
+                            )}
                             <p className="text-sm text-stone-500 truncate">{conv.messages?.[0]?.content || 'No messages'}</p>
                           </div>
                         </div>
@@ -934,6 +1002,11 @@ function ConversationsPage() {
                           <Badge variant={conv.status === 'ACTIVE' ? 'default' : 'secondary'} className="text-xs">
                             {conv.status}
                           </Badge>
+                          {conv.channel === 'SMS' && (
+                            <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+                              <Smartphone className="w-3 h-3 mr-1" /> SMS
+                            </Badge>
+                          )}
                           {conv.handedOffToHuman && (
                             <Badge variant="destructive" className="text-xs">Needs attention</Badge>
                           )}
@@ -954,15 +1027,41 @@ function ConversationsPage() {
               <CardHeader className="border-b">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarFallback>{selectedConversation.customerName?.[0] || 'V'}</AvatarFallback>
-                    </Avatar>
+                    <div className="relative">
+                      <Avatar>
+                        <AvatarFallback>
+                          {selectedConversation.customerName?.[0] || (selectedConversation.channel === 'SMS' ? 'S' : 'V')}
+                        </AvatarFallback>
+                      </Avatar>
+                      {selectedConversation.channel === 'SMS' && (
+                        <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-0.5">
+                          <Smartphone className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                    </div>
                     <div>
-                      <CardTitle className="text-lg">{selectedConversation.customerName || 'Visitor'}</CardTitle>
-                      <CardDescription>{selectedConversation.customerEmail || selectedConversation.customerPhone || 'No contact info'}</CardDescription>
+                      <CardTitle className="text-lg">
+                        {selectedConversation.customerName || (selectedConversation.channel === 'SMS' ? selectedConversation.customerPhone : 'Visitor')}
+                      </CardTitle>
+                      <CardDescription className="flex items-center gap-2">
+                        {selectedConversation.channel === 'SMS' ? (
+                          <>
+                            <Smartphone className="w-3 h-3 text-green-600" />
+                            <span className="text-green-600">{selectedConversation.customerPhone}</span>
+                          </>
+                        ) : (
+                          selectedConversation.customerEmail || selectedConversation.customerPhone || 'No contact info'
+                        )}
+                      </CardDescription>
                     </div>
                   </div>
-                  <Badge>{selectedConversation.channel}</Badge>
+                  <Badge className={selectedConversation.channel === 'SMS' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : ''}>
+                    {selectedConversation.channel === 'SMS' ? (
+                      <><Smartphone className="w-3 h-3 mr-1" /> SMS</>
+                    ) : (
+                      <><Globe className="w-3 h-3 mr-1" /> Web</>
+                    )}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -971,25 +1070,63 @@ function ConversationsPage() {
                     {selectedConversation.messages?.map((msg: any) => (
                       <div key={msg.id} className={`flex ${msg.role === 'USER' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[70%] rounded-lg p-3 ${
-                          msg.role === 'USER' ? 'bg-orange-500 text-white' : 'bg-stone-100 text-stone-900'
+                          msg.role === 'USER'
+                            ? selectedConversation.channel === 'SMS'
+                              ? 'bg-green-500 text-white'
+                              : 'bg-orange-500 text-white'
+                            : 'bg-stone-100 dark:bg-stone-800 text-stone-900 dark:text-stone-100'
                         }`}>
-                          {msg.content}
+                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          <p className="text-xs opacity-70 mt-1">
+                            {format(new Date(msg.createdAt), 'h:mm a')}
+                          </p>
                         </div>
                       </div>
                     ))}
                   </div>
                 </ScrollArea>
                 <div className="p-4 border-t">
-                  <div className="flex gap-2">
-                    <Input placeholder="Type a message..." className="flex-1" />
-                    <Button>Send</Button>
-                  </div>
+                  {selectedConversation.channel === 'SMS' ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                        <Smartphone className="w-4 h-4" />
+                        <span>Send SMS to {selectedConversation.customerPhone}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Type an SMS message..."
+                          className="flex-1"
+                          value={replyMessage}
+                          onChange={(e) => setReplyMessage(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendSMSReply()}
+                          maxLength={1600}
+                        />
+                        <Button
+                          onClick={sendSMSReply}
+                          disabled={!replyMessage.trim() || isSending}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {isSending ? 'Sending...' : <><Send className="w-4 h-4 mr-1" /> Send SMS</>}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-stone-500">{replyMessage.length}/1600 characters</p>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input placeholder="Type a message..." className="flex-1" />
+                      <Button><Send className="w-4 h-4 mr-1" /> Send</Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </>
           ) : (
-            <div className="h-full flex items-center justify-center text-stone-500">
-              Select a conversation to view
+            <div className="h-full flex items-center justify-center text-stone-500 py-20">
+              <div className="text-center">
+                <MessageSquare className="w-12 h-12 mx-auto mb-4 text-stone-300" />
+                <p className="text-lg font-medium">Select a conversation to view</p>
+                <p className="text-sm">Click on a conversation from the list to see the full chat history</p>
+              </div>
             </div>
           )}
         </Card>

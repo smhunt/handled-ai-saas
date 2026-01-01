@@ -1,10 +1,16 @@
 // Conversation Routes
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import twilio from 'twilio';
 import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// Twilio client for sending SMS
+const twilioClient = process.env.TWILIO_ACCOUNT_SID
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
 
 router.use(authMiddleware);
 
@@ -140,6 +146,88 @@ router.get('/:businessId/handoffs', async (req, res) => {
   } catch (error) {
     console.error('Get handoffs error:', error);
     res.status(500).json({ error: 'Failed to fetch handoffs' });
+  }
+});
+
+// Send SMS message from dashboard
+router.post('/sms/send', async (req, res) => {
+  try {
+    const { to, message, businessId, conversationId } = req.body;
+    const userId = (req as any).userId;
+
+    if (!to || !message || !businessId) {
+      return res.status(400).json({ error: 'Missing required fields: to, message, businessId' });
+    }
+
+    if (!twilioClient) {
+      return res.status(503).json({ error: 'SMS service not configured' });
+    }
+
+    // Get business's Twilio number
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { twilioPhoneNumber: true, name: true }
+    });
+
+    const fromNumber = business?.twilioPhoneNumber || process.env.TWILIO_PHONE_NUMBER;
+    if (!fromNumber) {
+      return res.status(400).json({ error: 'Business does not have SMS enabled' });
+    }
+
+    // Normalize phone number
+    let normalizedTo = to.replace(/[^\d+]/g, '');
+    if (normalizedTo.length === 10) {
+      normalizedTo = `+1${normalizedTo}`;
+    } else if (!normalizedTo.startsWith('+')) {
+      normalizedTo = `+${normalizedTo}`;
+    }
+
+    // Send the SMS
+    const result = await twilioClient.messages.create({
+      to: normalizedTo,
+      from: fromNumber,
+      body: message
+    });
+
+    console.log(`SMS sent to ${to} from dashboard: ${result.sid}`);
+
+    // Store the outbound message in the conversation
+    if (conversationId) {
+      await prisma.message.create({
+        data: {
+          conversationId,
+          role: 'ASSISTANT',
+          content: message,
+          metadata: {
+            twilioSid: result.sid,
+            sentByHuman: true,
+            sentByUserId: userId,
+            channel: 'SMS'
+          }
+        }
+      });
+
+      // Update conversation last message time
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { lastMessageAt: new Date() }
+      });
+    }
+
+    // Log analytics event
+    await prisma.analyticsEvent.create({
+      data: {
+        businessId,
+        eventType: 'sms_sent_from_dashboard',
+        sessionId: conversationId,
+        eventData: { to, messageLength: message.length, twilioSid: result.sid }
+      }
+    });
+
+    res.json({ success: true, messageSid: result.sid });
+  } catch (error: any) {
+    console.error('Send SMS error:', error);
+    res.status(500).json({ error: error.message || 'Failed to send SMS' });
   }
 });
 
