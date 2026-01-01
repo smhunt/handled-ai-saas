@@ -8,7 +8,7 @@
 - [x] **Per-Business Twilio Numbers** - Each business can have dedicated SMS number ✅ Jan 1, 2026
 
 ### Medium Priority
-- [ ] **SMS Dashboard** - View and manage SMS conversations in dashboard
+- [x] **SMS Dashboard** - View and manage SMS conversations in dashboard ✅ Jan 1, 2026
 - [ ] **WhatsApp Integration** - Add WhatsApp as conversation channel
 - [ ] **SMS Templates** - Customizable message templates for confirmations
 

@@ -10,6 +10,11 @@ All notable changes to Handled AI SaaS will be documented in this file.
   - Each business can have dedicated Twilio phone number
   - Automatic markdown stripping for SMS responses
   - Response truncation for SMS character limits
+- **SMS Dashboard View** - Manage SMS conversations from dashboard
+  - Channel tabs (All/Web/SMS) with conversation counts
+  - SMS icon badges on conversation list items
+  - SMS reply functionality with character counter
+  - Green color scheme distinguishes SMS from web chat
 - Business `twilioPhoneNumber` field for per-business SMS numbers
 - SMS booking and order confirmations use business-specific number
 - Analytics tracking for SMS conversations
