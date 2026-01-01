@@ -34,7 +34,7 @@
 ## Dashboard Improvements
 
 - [ ] **Real-time conversation view** - Watch live conversations as they happen
-- [ ] **Analytics dashboard** - Conversation metrics, booking rates, popular times
+- [x] **Analytics dashboard** - Conversation metrics, booking rates, popular times ✅ Jan 1, 2026
 - [ ] **Widget customization UI** - Visual editor for widget colors, position, greeting
 
 ## API Improvements

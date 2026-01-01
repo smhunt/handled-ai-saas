@@ -1650,45 +1650,135 @@ function OrdersPage() {
 function AnalyticsPage() {
   const { business } = useBusiness()
   const [dateRange, setDateRange] = useState('7')
+  const [activeTab, setActiveTab] = useState('overview')
 
-  // Calculate date range
-  const getDateRange = () => {
-    const end = new Date()
-    const start = new Date()
-    start.setDate(start.getDate() - parseInt(dateRange))
-    return { start, end }
-  }
-
-  const { data: analyticsData } = useQuery({
-    queryKey: ['analytics', business?.id, dateRange],
-    queryFn: () => api(`/api/analytics/${business?.id}?days=${dateRange}`),
+  // Fetch all analytics data
+  const { data: overviewData, isLoading: overviewLoading } = useQuery({
+    queryKey: ['analytics-overview', business?.id, dateRange],
+    queryFn: () => api(`/api/analytics/${business?.id}/overview?days=${dateRange}`),
     enabled: !!business?.id
   })
 
-  // Use real data if available, otherwise use mock data
-  const chartData = analyticsData?.dailyConversations || [
-    { day: 'Mon', count: 12 },
-    { day: 'Tue', count: 19 },
-    { day: 'Wed', count: 15 },
-    { day: 'Thu', count: 22 },
-    { day: 'Fri', count: 28 },
-    { day: 'Sat', count: 35 },
-    { day: 'Sun', count: 18 },
-  ]
+  const { data: conversationData } = useQuery({
+    queryKey: ['analytics-conversations', business?.id, dateRange],
+    queryFn: () => api(`/api/analytics/${business?.id}/conversations?days=${dateRange}`),
+    enabled: !!business?.id && (activeTab === 'overview' || activeTab === 'conversations')
+  })
 
-  const metrics = analyticsData?.metrics || {
-    automationRate: 94,
-    aiHandled: 847,
-    humanHandoffs: 53,
-    avgResponseTime: 1.2
+  const { data: bookingData } = useQuery({
+    queryKey: ['analytics-bookings', business?.id, dateRange],
+    queryFn: () => api(`/api/analytics/${business?.id}/bookings?days=${dateRange}`),
+    enabled: !!business?.id && (activeTab === 'overview' || activeTab === 'bookings')
+  })
+
+  const { data: orderData } = useQuery({
+    queryKey: ['analytics-orders', business?.id, dateRange],
+    queryFn: () => api(`/api/analytics/${business?.id}/orders?days=${dateRange}`),
+    enabled: !!business?.id && (activeTab === 'overview' || activeTab === 'orders')
+  })
+
+  const { data: aiData } = useQuery({
+    queryKey: ['analytics-ai', business?.id, dateRange],
+    queryFn: () => api(`/api/analytics/${business?.id}/ai-performance?days=${dateRange}`),
+    enabled: !!business?.id && (activeTab === 'overview' || activeTab === 'ai')
+  })
+
+  const metrics = overviewData?.metrics || {}
+
+  // Format chart data
+  const conversationChartData = conversationData?.daily?.map((d: any) => ({
+    date: format(new Date(d.date), 'MMM d'),
+    total: d.total,
+    resolved: d.resolved,
+    handedOff: d.handedOff
+  })) || []
+
+  const bookingChartData = bookingData?.daily?.map((d: any) => ({
+    date: format(new Date(d.date), 'MMM d'),
+    total: d.total,
+    confirmed: d.confirmed,
+    cancelled: d.cancelled
+  })) || []
+
+  const orderChartData = orderData?.daily?.map((d: any) => ({
+    date: format(new Date(d.date), 'MMM d'),
+    orders: d.orders,
+    revenue: d.revenue
+  })) || []
+
+  const aiChartData = aiData?.daily?.map((d: any) => ({
+    date: format(new Date(d.date), 'MMM d'),
+    messages: d.messages,
+    tokens: Math.round(d.tokens / 1000) // Show in thousands
+  })) || []
+
+  // KPI Card component
+  const KPICard = ({ title, value, change, icon: Icon, format: formatType = 'number' }: any) => {
+    const formattedValue = formatType === 'currency'
+      ? `$${value?.toFixed(2) || '0.00'}`
+      : formatType === 'percent'
+        ? `${value || 0}%`
+        : value || 0
+
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-stone-500 dark:text-stone-400">{title}</p>
+              <p className="text-2xl font-bold text-stone-900 dark:text-stone-100 mt-1">{formattedValue}</p>
+              {change !== undefined && (
+                <p className={`text-sm mt-1 ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {change >= 0 ? '↑' : '↓'} {Math.abs(change)}% vs previous period
+                </p>
+              )}
+            </div>
+            <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-lg">
+              <Icon className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Channel breakdown for pie-like display
+  const ChannelBreakdown = ({ data }: { data: Record<string, number> }) => {
+    const total = Object.values(data || {}).reduce((a, b) => a + b, 0)
+    const channels = [
+      { key: 'WEB', label: 'Web Widget', color: 'bg-orange-500' },
+      { key: 'SMS', label: 'SMS', color: 'bg-green-500' },
+      { key: 'WHATSAPP', label: 'WhatsApp', color: 'bg-emerald-500' }
+    ]
+
+    return (
+      <div className="space-y-3">
+        {channels.map(channel => {
+          const count = data?.[channel.key] || 0
+          const percent = total > 0 ? Math.round((count / total) * 100) : 0
+          return (
+            <div key={channel.key} className="space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-stone-600 dark:text-stone-400">{channel.label}</span>
+                <span className="font-medium">{count} ({percent}%)</span>
+              </div>
+              <div className="w-full bg-stone-200 dark:bg-stone-700 rounded-full h-2">
+                <div className={`${channel.color} h-2 rounded-full transition-all`} style={{ width: `${percent}%` }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900">Analytics</h1>
-          <p className="text-stone-600">Track performance and insights</p>
+          <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Analytics</h1>
+          <p className="text-stone-600 dark:text-stone-400">Track performance and insights</p>
         </div>
         <Select value={dateRange} onValueChange={setDateRange}>
           <SelectTrigger className="w-40">
@@ -1703,55 +1793,388 @@ function AnalyticsPage() {
         </Select>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Conversations Over Time</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="day" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#f97316" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="conversations">Conversations</TabsTrigger>
+          <TabsTrigger value="bookings">Bookings</TabsTrigger>
+          <TabsTrigger value="orders">Orders</TabsTrigger>
+          <TabsTrigger value="ai">AI Performance</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>AI Performance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-stone-600">Automation Rate</span>
-                <span className="text-2xl font-bold text-green-600">{metrics.automationRate}%</span>
-              </div>
-              <div className="w-full bg-stone-200 rounded-full h-2">
-                <div className="bg-green-500 h-2 rounded-full" style={{ width: `${metrics.automationRate}%` }} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-stone-600">Conversations Handled by AI</span>
-                <span className="font-medium">{metrics.aiHandled}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-stone-600">Human Handoffs</span>
-                <span className="font-medium">{metrics.humanHandoffs}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-stone-600">Avg Response Time</span>
-                <span className="font-medium">{metrics.avgResponseTime}s</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KPICard
+              title="Conversations"
+              value={metrics.conversations?.total}
+              change={metrics.conversations?.change}
+              icon={MessageSquare}
+            />
+            <KPICard
+              title="Bookings"
+              value={metrics.bookings?.total}
+              change={metrics.bookings?.change}
+              icon={Calendar}
+            />
+            <KPICard
+              title="Orders"
+              value={metrics.orders?.total}
+              change={metrics.orders?.change}
+              icon={ShoppingBag}
+            />
+            <KPICard
+              title="AI Automation"
+              value={metrics.automationRate}
+              format="percent"
+              icon={Zap}
+            />
+          </div>
+
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Conversations Over Time</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={conversationChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-stone-200 dark:stroke-stone-700" />
+                      <XAxis dataKey="date" className="text-xs" />
+                      <YAxis className="text-xs" />
+                      <Tooltip />
+                      <Area type="monotone" dataKey="total" stroke="#f97316" fill="#fed7aa" name="Total" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Channel Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ChannelBreakdown data={conversationData?.channels} />
+                <Separator className="my-4" />
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <p className="text-2xl font-bold text-stone-900 dark:text-stone-100">
+                      {conversationData?.averageMessagesPerConversation || 0}
+                    </p>
+                    <p className="text-sm text-stone-500">Avg messages/conversation</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-stone-900 dark:text-stone-100">
+                      {metrics.handoffRequests || 0}
+                    </p>
+                    <p className="text-sm text-stone-500">Human handoffs</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Revenue & Quick Stats */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Revenue Trend</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={orderChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-stone-200 dark:stroke-stone-700" />
+                      <XAxis dataKey="date" className="text-xs" />
+                      <YAxis className="text-xs" tickFormatter={(v) => `$${v}`} />
+                      <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, 'Revenue']} />
+                      <Area type="monotone" dataKey="revenue" stroke="#22c55e" fill="#bbf7d0" name="Revenue" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Quick Stats</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-stone-600 dark:text-stone-400">Total Revenue</span>
+                  <span className="font-bold text-green-600">${(orderData?.totalRevenue || 0).toFixed(2)}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center">
+                  <span className="text-stone-600 dark:text-stone-400">Avg Order Value</span>
+                  <span className="font-medium">${(orderData?.averageOrderValue || 0).toFixed(2)}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center">
+                  <span className="text-stone-600 dark:text-stone-400">Total Messages</span>
+                  <span className="font-medium">{metrics.messages || 0}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between items-center">
+                  <span className="text-stone-600 dark:text-stone-400">Conversion Rate</span>
+                  <span className="font-medium">{aiData?.conversionRate || 0}%</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Conversations Tab */}
+        <TabsContent value="conversations" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <KPICard title="Total Conversations" value={conversationData?.totalConversations} icon={MessageSquare} />
+            <KPICard title="Avg Messages" value={conversationData?.averageMessagesPerConversation} icon={MessageSquare} />
+            <KPICard title="Resolution Rate" value={conversationData?.statuses?.RESOLVED ? Math.round((conversationData.statuses.RESOLVED / conversationData.totalConversations) * 100) : 0} format="percent" icon={Check} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily Conversations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={conversationChartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="total" fill="#f97316" name="Total" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="resolved" fill="#22c55e" name="Resolved" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Conversation Status</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {Object.entries(conversationData?.statuses || {}).map(([status, count]) => (
+                    <div key={status} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={status === 'RESOLVED' ? 'default' : status === 'ACTIVE' ? 'secondary' : 'outline'}>
+                          {status}
+                        </Badge>
+                      </div>
+                      <span className="font-medium">{count as number}</span>
+                    </div>
+                  ))}
+                </div>
+                <Separator className="my-4" />
+                <CardTitle className="text-base mb-3">By Channel</CardTitle>
+                <ChannelBreakdown data={conversationData?.channels} />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Bookings Tab */}
+        <TabsContent value="bookings" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <KPICard title="Total Bookings" value={bookingData?.totalBookings} icon={Calendar} />
+            <KPICard title="Confirmed" value={bookingData?.statuses?.CONFIRMED || 0} icon={Check} />
+            <KPICard title="Cancelled" value={bookingData?.statuses?.CANCELLED || 0} icon={X} />
+            <KPICard title="Avg Party Size" value={bookingData?.averagePartySize} icon={Users} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily Bookings</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={bookingChartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="confirmed" fill="#22c55e" name="Confirmed" stackId="a" />
+                      <Bar dataKey="cancelled" fill="#ef4444" name="Cancelled" stackId="a" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Popular Booking Times</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {Object.entries(bookingData?.popularTimes || {})
+                    .sort((a, b) => (b[1] as number) - (a[1] as number))
+                    .slice(0, 8)
+                    .map(([time, count]) => (
+                      <div key={time} className="flex items-center justify-between">
+                        <span className="text-stone-600 dark:text-stone-400">{time}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 bg-stone-200 dark:bg-stone-700 rounded-full h-2">
+                            <div
+                              className="bg-orange-500 h-2 rounded-full"
+                              style={{ width: `${((count as number) / Math.max(...Object.values(bookingData?.popularTimes || { '': 1 }) as number[])) * 100}%` }}
+                            />
+                          </div>
+                          <span className="font-medium w-8 text-right">{count as number}</span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Orders Tab */}
+        <TabsContent value="orders" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <KPICard title="Total Orders" value={orderData?.totalOrders} icon={ShoppingBag} />
+            <KPICard title="Total Revenue" value={orderData?.totalRevenue} format="currency" icon={CreditCard} />
+            <KPICard title="Avg Order Value" value={orderData?.averageOrderValue} format="currency" icon={CreditCard} />
+            <KPICard title="Pickup Orders" value={orderData?.orderTypes?.PICKUP || 0} icon={ShoppingBag} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Revenue Over Time</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={orderChartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis tickFormatter={(v) => `$${v}`} />
+                      <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, 'Revenue']} />
+                      <Area type="monotone" dataKey="revenue" stroke="#22c55e" fill="#bbf7d0" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Selling Items</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {(orderData?.topItems || []).slice(0, 8).map((item: any, index: number) => (
+                    <div key={item.name} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-stone-400 font-medium w-6">#{index + 1}</span>
+                        <span className="font-medium">{item.name}</span>
+                      </div>
+                      <Badge variant="secondary">{item.count} sold</Badge>
+                    </div>
+                  ))}
+                  {(!orderData?.topItems || orderData.topItems.length === 0) && (
+                    <p className="text-stone-500 text-center py-4">No order data yet</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* AI Performance Tab */}
+        <TabsContent value="ai" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <KPICard title="Automation Rate" value={aiData?.automationRate} format="percent" icon={Zap} />
+            <KPICard title="Conversion Rate" value={aiData?.conversionRate} format="percent" icon={Check} />
+            <KPICard title="Total Messages" value={aiData?.totalMessages} icon={MessageSquare} />
+            <KPICard title="Est. AI Cost" value={aiData?.estimatedCost} format="currency" icon={CreditCard} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Usage Over Time</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={aiChartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${v}k`} />
+                      <Tooltip />
+                      <Area yAxisId="left" type="monotone" dataKey="messages" stroke="#f97316" fill="#fed7aa" name="Messages" />
+                      <Area yAxisId="right" type="monotone" dataKey="tokens" stroke="#3b82f6" fill="#bfdbfe" name="Tokens (k)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Performance Metrics</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-stone-600 dark:text-stone-400">Automation Rate</span>
+                    <span className="font-bold text-green-600">{aiData?.automationRate || 0}%</span>
+                  </div>
+                  <div className="w-full bg-stone-200 dark:bg-stone-700 rounded-full h-3">
+                    <div className="bg-green-500 h-3 rounded-full transition-all" style={{ width: `${aiData?.automationRate || 0}%` }} />
+                  </div>
+                  <p className="text-xs text-stone-500 mt-1">Conversations handled fully by AI</p>
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-stone-600 dark:text-stone-400">Conversion Rate</span>
+                    <span className="font-bold text-blue-600">{aiData?.conversionRate || 0}%</span>
+                  </div>
+                  <div className="w-full bg-stone-200 dark:bg-stone-700 rounded-full h-3">
+                    <div className="bg-blue-500 h-3 rounded-full transition-all" style={{ width: `${aiData?.conversionRate || 0}%` }} />
+                  </div>
+                  <p className="text-xs text-stone-500 mt-1">Conversations resulting in booking/order</p>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <CardTitle className="text-base mb-3">Handoff Reasons</CardTitle>
+                  {Object.entries(aiData?.handoffReasons || {}).length > 0 ? (
+                    <div className="space-y-2">
+                      {Object.entries(aiData?.handoffReasons || {}).map(([reason, count]) => (
+                        <div key={reason} className="flex justify-between items-center">
+                          <span className="text-sm text-stone-600 dark:text-stone-400 truncate flex-1">{reason}</span>
+                          <Badge variant="outline">{count as number}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-stone-500">No handoffs in this period</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

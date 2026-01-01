@@ -2,6 +2,19 @@
 
 All notable changes to Handled AI SaaS will be documented in this file.
 
+## [0.5.0] - 2026-01-01
+
+### Added
+- **Analytics Dashboard** - Comprehensive analytics with 5 tabbed sections
+  - Overview tab with KPI cards, trends, channel breakdown, quick stats
+  - Conversations tab with daily message charts and status breakdown
+  - Bookings tab with service distribution and popular times heatmap
+  - Orders tab with revenue trends and top-selling items
+  - AI Performance tab with automation rate, response times, token usage
+  - Date range selector (7, 14, 30, 90 days)
+  - Period-over-period comparisons on all KPIs
+- Test SMS conversation seeding script (`backend/scripts/create-test-sms.ts`)
+
 ## [0.4.0] - 2026-01-01
 
 ### Added
