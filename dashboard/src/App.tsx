@@ -17,7 +17,7 @@ import {
   Plus, Search, Filter, MoreVertical, Check, Clock,
   ChevronDown, Zap, Building2, CreditCard, Globe,
   Briefcase, UtensilsCrossed, HelpCircle, MapPin, Trash2, Pencil, Copy, Key, Shield, Download, Sun, Moon,
-  Eye, Send, Smartphone, Mail, Code, FileCode
+  Eye, Send, Smartphone, Mail, Code, FileCode, Bot, User, Wifi, WifiOff
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -37,6 +37,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { format, formatDistanceToNow } from 'date-fns'
 import { io, Socket } from 'socket.io-client'
+import { toast } from 'sonner'
+import { useConversationSocket } from '@/hooks/use-conversation-socket'
 
 // API Configuration
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
@@ -201,6 +203,8 @@ interface NotificationContextType {
   markAsRead: (id: string) => void
   markAllAsRead: () => void
   clearNotifications: () => void
+  socket: Socket | null
+  isConnected: boolean
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null)
@@ -211,11 +215,18 @@ function useNotifications() {
   return context
 }
 
+function useSocket() {
+  const context = useContext(NotificationContext)
+  if (!context) throw new Error('useSocket must be used within NotificationProvider')
+  return { socket: context.socket, isConnected: context.isConnected }
+}
+
 function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { getToken } = useClerkAuth()
   const { business } = useBusiness()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [socket, setSocket] = useState<Socket | null>(null)
+  const [isConnected, setIsConnected] = useState(false)
 
   useEffect(() => {
     if (!business?.id) return
@@ -225,14 +236,28 @@ function NotificationProvider({ children }: { children: React.ReactNode }) {
       if (!token) return
 
       const newSocket = io(API_URL, {
-        auth: { token }
+        auth: { token },
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000
       })
 
-      newSocket.on('connect', () => console.log('Connected to notification socket'))
+      newSocket.on('connect', () => {
+        console.log('Connected to socket')
+        setIsConnected(true)
+      })
       newSocket.on('notification', (notification: Notification) => {
         setNotifications(prev => [{ ...notification, read: false }, ...prev].slice(0, 50))
       })
-      newSocket.on('disconnect', () => console.log('Disconnected from notification socket'))
+      newSocket.on('disconnect', (reason) => {
+        console.log('Disconnected from socket:', reason)
+        setIsConnected(false)
+      })
+      newSocket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error.message)
+        setIsConnected(false)
+      })
 
       setSocket(newSocket)
     }
@@ -250,7 +275,7 @@ function NotificationProvider({ children }: { children: React.ReactNode }) {
   const clearNotifications = () => setNotifications([])
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications, socket, isConnected }}>
       {children}
     </NotificationContext.Provider>
   )
@@ -746,19 +771,119 @@ function DashboardHome() {
 function ConversationsPage() {
   const { business } = useBusiness()
   const queryClient = useQueryClient()
+  const { socket, isConnected } = useSocket()
   const [selectedConversation, setSelectedConversation] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [channelFilter, setChannelFilter] = useState<string>('ALL')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [replyMessage, setReplyMessage] = useState('')
+  const [webReplyMessage, setWebReplyMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [typingConversations, setTypingConversations] = useState<Set<string>>(new Set())
+
+  // Real-time conversation socket
+  const {
+    watchConversation,
+    unwatchConversation,
+    sendStaffMessage,
+    takeoverConversation,
+    returnToAI
+  } = useConversationSocket({
+    socket,
+    isConnected,
+    businessId: business?.id,
+    onNewMessage: (conversationId, message) => {
+      // Update the conversation in the cache
+      queryClient.setQueryData(['conversations', business?.id], (old: any) => {
+        if (!old?.conversations) return old
+        return {
+          ...old,
+          conversations: old.conversations.map((conv: any) =>
+            conv.id === conversationId
+              ? { ...conv, messages: [...(conv.messages || []), message], lastMessageAt: message.createdAt }
+              : conv
+          ).sort((a: any, b: any) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+        }
+      })
+      // Update selected conversation if it's the active one
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation((prev: any) => ({
+          ...prev,
+          messages: [...(prev.messages || []), message]
+        }))
+      }
+    },
+    onConversationUpdated: ({ conversationId, lastMessage }) => {
+      queryClient.setQueryData(['conversations', business?.id], (old: any) => {
+        if (!old?.conversations) return old
+        return {
+          ...old,
+          conversations: old.conversations.map((conv: any) =>
+            conv.id === conversationId
+              ? { ...conv, messages: [lastMessage], lastMessageAt: lastMessage.createdAt }
+              : conv
+          ).sort((a: any, b: any) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+        }
+      })
+    },
+    onNewConversation: (conversation) => {
+      queryClient.setQueryData(['conversations', business?.id], (old: any) => {
+        if (!old?.conversations) return old
+        return {
+          ...old,
+          conversations: [conversation, ...old.conversations]
+        }
+      })
+      toast.info('New conversation', { description: `${conversation.customerName || 'A visitor'} started a conversation` })
+    },
+    onConversationResolved: ({ conversationId }) => {
+      queryClient.setQueryData(['conversations', business?.id], (old: any) => {
+        if (!old?.conversations) return old
+        return {
+          ...old,
+          conversations: old.conversations.map((conv: any) =>
+            conv.id === conversationId ? { ...conv, status: 'RESOLVED' } : conv
+          )
+        }
+      })
+    },
+    onHandoffRequest: (conversation) => {
+      toast.warning('Customer needs help', {
+        description: `${conversation.customerName || 'A customer'} requested human assistance`,
+        action: { label: 'View', onClick: () => setSelectedConversation(conversation) },
+        duration: 10000
+      })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    },
+    onTyping: ({ conversationId, isTyping }) => {
+      if (!conversationId) return
+      setTypingConversations(prev => {
+        const next = new Set(prev)
+        if (isTyping) next.add(conversationId)
+        else next.delete(conversationId)
+        return next
+      })
+    }
+  })
+
+  // Watch/unwatch conversation when selection changes
+  useEffect(() => {
+    if (selectedConversation?.id) {
+      watchConversation(selectedConversation.id)
+    }
+    return () => {
+      if (selectedConversation?.id) {
+        unwatchConversation(selectedConversation.id)
+      }
+    }
+  }, [selectedConversation?.id, watchConversation, unwatchConversation])
 
   const { data: conversationsData } = useQuery({
     queryKey: ['conversations', business?.id],
     queryFn: () => api(`/api/conversations/${business?.id}`),
     enabled: !!business?.id,
-    refetchInterval: 10000
+    refetchInterval: isConnected ? false : 10000 // Fallback polling when disconnected
   })
 
   const bulkUpdateMutation = useMutation({
@@ -824,6 +949,48 @@ function ConversationsPage() {
     }
   }
 
+  // Send Web reply via socket
+  const sendWebReply = () => {
+    if (!webReplyMessage.trim() || !selectedConversation?.id) return
+
+    setIsSending(true)
+    const success = sendStaffMessage(selectedConversation.id, webReplyMessage)
+    if (success) {
+      // Optimistically add the message
+      const optimisticMessage = {
+        id: `temp-${Date.now()}`,
+        role: 'ASSISTANT',
+        content: webReplyMessage,
+        createdAt: new Date().toISOString(),
+        isHuman: true
+      }
+      setSelectedConversation((prev: any) => ({
+        ...prev,
+        messages: [...(prev.messages || []), optimisticMessage]
+      }))
+      setWebReplyMessage('')
+    } else {
+      toast.error('Failed to send message', { description: 'Not connected to server' })
+    }
+    setIsSending(false)
+  }
+
+  // Handle takeover
+  const handleTakeover = () => {
+    if (!selectedConversation?.id) return
+    takeoverConversation(selectedConversation.id)
+    setSelectedConversation((prev: any) => ({ ...prev, handedOffToHuman: true, status: 'HANDED_OFF' }))
+    toast.success('Conversation taken over', { description: 'You are now chatting with the customer' })
+  }
+
+  // Handle return to AI
+  const handleReturnToAI = () => {
+    if (!selectedConversation?.id) return
+    returnToAI(selectedConversation.id)
+    setSelectedConversation((prev: any) => ({ ...prev, handedOffToHuman: false, status: 'ACTIVE' }))
+    toast.success('Returned to AI', { description: 'AI is now handling this conversation' })
+  }
+
   // Bulk selection helpers
   const toggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -853,7 +1020,17 @@ function ConversationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Conversations</h1>
-          <p className="text-stone-600 dark:text-stone-400">Manage customer chat conversations</p>
+          <div className="flex items-center gap-3">
+            <p className="text-stone-600 dark:text-stone-400">Manage customer chat conversations</p>
+            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs ${
+              isConnected
+                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+            }`}>
+              {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              {isConnected ? 'Live' : 'Reconnecting...'}
+            </div>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button
@@ -1055,13 +1232,26 @@ function ConversationsPage() {
                       </CardDescription>
                     </div>
                   </div>
-                  <Badge className={selectedConversation.channel === 'SMS' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : ''}>
-                    {selectedConversation.channel === 'SMS' ? (
-                      <><Smartphone className="w-3 h-3 mr-1" /> SMS</>
-                    ) : (
-                      <><Globe className="w-3 h-3 mr-1" /> Web</>
+                  <div className="flex items-center gap-2">
+                    <Badge className={selectedConversation.channel === 'SMS' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : ''}>
+                      {selectedConversation.channel === 'SMS' ? (
+                        <><Smartphone className="w-3 h-3 mr-1" /> SMS</>
+                      ) : (
+                        <><Globe className="w-3 h-3 mr-1" /> Web</>
+                      )}
+                    </Badge>
+                    {selectedConversation.channel === 'WEB' && (
+                      selectedConversation.handedOffToHuman ? (
+                        <Button size="sm" variant="outline" onClick={handleReturnToAI}>
+                          <Bot className="w-4 h-4 mr-1" /> Return to AI
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={handleTakeover}>
+                          <User className="w-4 h-4 mr-1" /> Take Over
+                        </Button>
+                      )
                     )}
-                  </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -1079,10 +1269,26 @@ function ConversationsPage() {
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                           <p className="text-xs opacity-70 mt-1">
                             {format(new Date(msg.createdAt), 'h:mm a')}
+                            {msg.isHuman && <span className="ml-1">(Staff)</span>}
                           </p>
                         </div>
                       </div>
                     ))}
+                    {/* Typing indicator */}
+                    {typingConversations.has(selectedConversation.id) && (
+                      <div className="flex justify-end">
+                        <div className="bg-orange-100 dark:bg-orange-900 rounded-lg p-3 text-orange-800 dark:text-orange-200">
+                          <div className="flex items-center gap-2">
+                            <span className="flex gap-1">
+                              <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </span>
+                            <span className="text-sm">Customer is typing...</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </ScrollArea>
                 <div className="p-4 border-t">
@@ -1112,9 +1318,32 @@ function ConversationsPage() {
                       <p className="text-xs text-stone-500">{replyMessage.length}/1600 characters</p>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
-                      <Input placeholder="Type a message..." className="flex-1" />
-                      <Button><Send className="w-4 h-4 mr-1" /> Send</Button>
+                    <div className="space-y-2">
+                      {selectedConversation.handedOffToHuman && (
+                        <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                          <User className="w-4 h-4" />
+                          <span>You are handling this conversation</span>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder={selectedConversation.handedOffToHuman ? "Type your reply..." : "Take over to send a message..."}
+                          className="flex-1"
+                          value={webReplyMessage}
+                          onChange={(e) => setWebReplyMessage(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && selectedConversation.handedOffToHuman && sendWebReply()}
+                          disabled={!selectedConversation.handedOffToHuman}
+                        />
+                        <Button
+                          onClick={sendWebReply}
+                          disabled={!webReplyMessage.trim() || isSending || !selectedConversation.handedOffToHuman}
+                        >
+                          {isSending ? 'Sending...' : <><Send className="w-4 h-4 mr-1" /> Send</>}
+                        </Button>
+                      </div>
+                      {!selectedConversation.handedOffToHuman && (
+                        <p className="text-xs text-stone-500">Click "Take Over" above to start chatting with the customer</p>
+                      )}
                     </div>
                   )}
                 </div>

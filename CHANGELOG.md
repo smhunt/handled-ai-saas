@@ -2,6 +2,20 @@
 
 All notable changes to Handled AI SaaS will be documented in this file.
 
+## [0.6.0] - 2026-01-01
+
+### Added
+- **Real-time Conversation View** - Live WebSocket updates for conversations
+  - Connection status indicator (Live/Reconnecting)
+  - Live message streaming without polling when connected
+  - Typing indicators when customer is typing
+  - Real-time conversation list updates (new messages, status changes)
+  - Handoff controls: "Take Over" and "Return to AI" buttons
+  - Staff messaging for web conversations
+  - Toast notifications for handoff requests
+  - Fallback polling when WebSocket disconnected
+- New `useConversationSocket` hook for socket operations
+
 ## [0.5.0] - 2026-01-01
 
 ### Added
