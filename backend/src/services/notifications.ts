@@ -313,57 +313,78 @@ export async function sendBookingConfirmation(booking: any) {
 
   const business = await prisma.business.findUnique({
     where: { id: booking.businessId },
-    select: { name: true, phone: true, email: true }
+    select: { name: true, phone: true, email: true, twilioPhoneNumber: true }
   });
 
   // Email confirmation
   if (booking.customerEmail) {
-    await emailTransporter.sendMail({
-      from: `"${business?.name}" <${process.env.SMTP_FROM || 'notifications@handled.ai'}>`,
-      to: booking.customerEmail,
-      subject: `Booking Confirmed - ${business?.name}`,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2>Your Booking is Confirmed! ✓</h2>
-          <p>Hi ${booking.customerName},</p>
-          <p>Your reservation at <strong>${business?.name}</strong> has been confirmed.</p>
-          <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>Date:</strong> ${format(new Date(booking.startTime), 'EEEE, MMMM d, yyyy')}</p>
-            <p><strong>Time:</strong> ${format(new Date(booking.startTime), 'h:mm a')}</p>
-            <p><strong>Party Size:</strong> ${booking.partySize}</p>
-            <p><strong>Confirmation Code:</strong> ${booking.confirmationCode}</p>
+    try {
+      await emailTransporter.sendMail({
+        from: `"${business?.name}" <${process.env.SMTP_FROM || 'notifications@handled.ai'}>`,
+        to: booking.customerEmail,
+        subject: `Booking Confirmed - ${business?.name}`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2>Your Booking is Confirmed! ✓</h2>
+            <p>Hi ${booking.customerName},</p>
+            <p>Your reservation at <strong>${business?.name}</strong> has been confirmed.</p>
+            <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p><strong>Date:</strong> ${format(new Date(booking.startTime), 'EEEE, MMMM d, yyyy')}</p>
+              <p><strong>Time:</strong> ${format(new Date(booking.startTime), 'h:mm a')}</p>
+              <p><strong>Party Size:</strong> ${booking.partySize}</p>
+              <p><strong>Confirmation Code:</strong> ${booking.confirmationCode}</p>
+            </div>
+            <p>Need to make changes? Reply to this email or call us at ${business?.phone || 'our phone number'}.</p>
+            <p>See you soon!</p>
+            <p style="color: #666;">— The ${business?.name} Team</p>
           </div>
-          <p>Need to make changes? Reply to this email or call us at ${business?.phone || 'our phone number'}.</p>
-          <p>See you soon!</p>
-          <p style="color: #666;">— The ${business?.name} Team</p>
-        </div>
-      `
-    });
+        `
+      });
+    } catch (error) {
+      console.error('Failed to send booking confirmation email:', error);
+    }
   }
 
-  // SMS confirmation
-  if (booking.customerPhone && twilioClient && TWILIO_PHONE) {
-    await twilioClient.messages.create({
-      body: `✓ Booking confirmed at ${business?.name}! ${format(new Date(booking.startTime), 'MMM d')} at ${format(new Date(booking.startTime), 'h:mm a')} for ${booking.partySize}. Code: ${booking.confirmationCode}`,
-      from: TWILIO_PHONE,
-      to: booking.customerPhone
-    });
+  // SMS confirmation - use business's Twilio number if available, fallback to global
+  if (booking.customerPhone && twilioClient) {
+    const fromNumber = business?.twilioPhoneNumber || TWILIO_PHONE;
+    if (fromNumber) {
+      try {
+        await twilioClient.messages.create({
+          body: `✓ Booking confirmed at ${business?.name}! ${format(new Date(booking.startTime), 'MMM d')} at ${format(new Date(booking.startTime), 'h:mm a')} for ${booking.partySize}. Code: ${booking.confirmationCode}`,
+          from: fromNumber,
+          to: booking.customerPhone
+        });
+        console.log(`Booking confirmation SMS sent to ${booking.customerPhone}`);
+      } catch (error) {
+        console.error('Failed to send booking confirmation SMS:', error);
+      }
+    }
   }
 }
 
 export async function sendOrderConfirmation(order: any) {
-  if (!order.customerPhone || !twilioClient || !TWILIO_PHONE) return;
+  if (!order.customerPhone || !twilioClient) return;
 
   const business = await prisma.business.findUnique({
     where: { id: order.businessId },
-    select: { name: true }
+    select: { name: true, twilioPhoneNumber: true }
   });
 
-  await twilioClient.messages.create({
-    body: `✓ Order #${order.orderNumber} confirmed at ${business?.name}! Your ${order.type.toLowerCase()} order will be ready soon. Total: $${order.total.toFixed(2)}`,
-    from: TWILIO_PHONE,
-    to: order.customerPhone
-  });
+  // Use business's Twilio number if available, fallback to global
+  const fromNumber = business?.twilioPhoneNumber || TWILIO_PHONE;
+  if (!fromNumber) return;
+
+  try {
+    await twilioClient.messages.create({
+      body: `✓ Order #${order.orderNumber} confirmed at ${business?.name}! Your ${order.type.toLowerCase()} order will be ready soon. Total: $${order.total.toFixed(2)}`,
+      from: fromNumber,
+      to: order.customerPhone
+    });
+    console.log(`Order confirmation SMS sent to ${order.customerPhone}`);
+  } catch (error) {
+    console.error('Failed to send order confirmation SMS:', error);
+  }
 }
 
 export async function sendPaymentFailedEmail(business: any, ownerEmail: string) {
@@ -434,24 +455,33 @@ export async function sendTrialExpiredEmail(business: any, ownerEmail: string) {
 
 export async function sendBookingReminder(booking: any) {
   // Send reminder 24 hours before
-  if (!booking.customerPhone || !twilioClient || !TWILIO_PHONE) return;
+  if (!booking.customerPhone || !twilioClient) return;
 
   const business = await prisma.business.findUnique({
     where: { id: booking.businessId },
-    select: { name: true }
+    select: { name: true, twilioPhoneNumber: true }
   });
 
-  await twilioClient.messages.create({
-    body: `Reminder: You have a reservation at ${business?.name} tomorrow at ${format(new Date(booking.startTime), 'h:mm a')} for ${booking.partySize}. See you then!`,
-    from: TWILIO_PHONE,
-    to: booking.customerPhone
-  });
+  // Use business's Twilio number if available, fallback to global
+  const fromNumber = business?.twilioPhoneNumber || TWILIO_PHONE;
+  if (!fromNumber) return;
 
-  // Mark reminder as sent
-  await prisma.booking.update({
-    where: { id: booking.id },
-    data: { reminderSent: true }
-  });
+  try {
+    await twilioClient.messages.create({
+      body: `Reminder: You have a reservation at ${business?.name} tomorrow at ${format(new Date(booking.startTime), 'h:mm a')} for ${booking.partySize}. See you then!`,
+      from: fromNumber,
+      to: booking.customerPhone
+    });
+
+    // Mark reminder as sent
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { reminderSent: true }
+    });
+    console.log(`Booking reminder SMS sent to ${booking.customerPhone}`);
+  } catch (error) {
+    console.error('Failed to send booking reminder SMS:', error);
+  }
 }
 
 // ============================================

@@ -71,6 +71,9 @@ model Business {
   // Branding
   logoUrl         String?
   primaryColor    String   @default("#f97316")
+
+  // SMS Settings (Twilio)
+  twilioPhoneNumber String?  // Business's Twilio number for SMS conversations
   
   // Widget settings
   widgetPosition  WidgetPosition @default(BOTTOM_RIGHT)

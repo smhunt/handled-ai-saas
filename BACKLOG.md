@@ -1,5 +1,17 @@
 # Handled AI - Backlog
 
+## SMS & Multi-Channel
+
+### High Priority
+- [x] **SMS Conversations** - Full AI-powered conversations over SMS via Twilio ✅ Jan 1, 2026
+- [x] **SMS Confirmations** - Send booking/order confirmations via SMS ✅ Jan 1, 2026
+- [x] **Per-Business Twilio Numbers** - Each business can have dedicated SMS number ✅ Jan 1, 2026
+
+### Medium Priority
+- [ ] **SMS Dashboard** - View and manage SMS conversations in dashboard
+- [ ] **WhatsApp Integration** - Add WhatsApp as conversation channel
+- [ ] **SMS Templates** - Customizable message templates for confirmations
+
 ## Widget Improvements
 
 ### High Priority

@@ -2,6 +2,24 @@
 
 All notable changes to Handled AI SaaS will be documented in this file.
 
+## [0.4.0] - 2026-01-01
+
+### Added
+- **SMS Conversations** - Full AI-powered conversations over SMS via Twilio
+  - Inbound SMS webhook handler routes messages to AI
+  - Each business can have dedicated Twilio phone number
+  - Automatic markdown stripping for SMS responses
+  - Response truncation for SMS character limits
+- Business `twilioPhoneNumber` field for per-business SMS numbers
+- SMS booking and order confirmations use business-specific number
+- Analytics tracking for SMS conversations
+
+### Changed
+- Widget typing indicator now shows business name ("Mario's Italian Kitchen is typing")
+- Widget message grouping for consecutive same-sender messages
+- Widget image support with logo in header
+- Booking/order confirmation SMS use business's Twilio number when available
+
 ## [0.3.0] - 2025-12-30
 
 ### Added

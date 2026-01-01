@@ -172,23 +172,34 @@ router.post('/twilio/sms', async (req, res) => {
   try {
     const { From, To, Body, MessageSid } = req.body;
 
-    console.log(`Incoming SMS from ${From}: ${Body}`);
+    console.log(`Incoming SMS from ${From} to ${To}: ${Body?.substring(0, 50)}...`);
 
-    // Find business by phone number
+    // Normalize phone number for matching (remove non-digits except +)
+    const normalizedTo = To.replace(/[^\d+]/g, '');
+
+    // Find business by Twilio phone number (match last 10 digits)
     const business = await prisma.business.findFirst({
-      where: { phone: To }
+      where: {
+        twilioPhoneNumber: {
+          contains: normalizedTo.slice(-10)
+        },
+        isActive: true
+      }
     });
 
     if (!business) {
-      console.log(`No business found for number ${To}`);
-      return res.status(200).send('<Response></Response>');
+      console.log(`No business found for Twilio number ${To}`);
+      return res.status(200).send('<Response><Message>This number is not currently active.</Message></Response>');
     }
+
+    // Normalize customer phone number
+    const normalizedFrom = From.replace(/[^\d+]/g, '');
 
     // Find or create conversation
     let conversation = await prisma.conversation.findFirst({
       where: {
         businessId: business.id,
-        customerPhone: From,
+        customerPhone: normalizedFrom,
         channel: 'SMS',
         status: { in: ['ACTIVE', 'WAITING'] }
       }
@@ -198,17 +209,45 @@ router.post('/twilio/sms', async (req, res) => {
       conversation = await prisma.conversation.create({
         data: {
           businessId: business.id,
-          visitorId: `sms_${From.replace(/\D/g, '')}`,
-          customerPhone: From,
+          visitorId: `sms_${normalizedFrom}`,
+          customerPhone: normalizedFrom,
           channel: 'SMS',
-          status: 'ACTIVE'
+          status: 'ACTIVE',
+          metadata: { twilioMessageSid: MessageSid }
+        }
+      });
+
+      // Log analytics event
+      await prisma.analyticsEvent.create({
+        data: {
+          businessId: business.id,
+          eventType: 'sms_conversation_started',
+          visitorId: `sms_${normalizedFrom}`,
+          eventData: { phone: From }
         }
       });
     }
 
     // Process with AI
     const { handleConversation } = await import('../services/conversation');
-    const response = await handleConversation(business.id, conversation.id, Body);
+    let response = await handleConversation(business.id, conversation.id, Body);
+
+    // Update last message timestamp
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: new Date() }
+    });
+
+    // Truncate response if too long for SMS (1600 char limit for concatenated)
+    if (response.length > 1500) {
+      response = response.substring(0, 1497) + '...';
+    }
+
+    // Remove markdown formatting for SMS (bold, italic, links)
+    response = response
+      .replace(/\*\*([^*]+)\*\*/g, '$1')  // Remove **bold**
+      .replace(/\*([^*]+)\*/g, '$1')      // Remove *italic*
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');  // Remove [links](url)
 
     // Send TwiML response
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -219,7 +258,7 @@ router.post('/twilio/sms', async (req, res) => {
     res.type('text/xml').send(twiml);
   } catch (error) {
     console.error('Twilio SMS webhook error:', error);
-    res.status(500).send('<Response><Message>Sorry, something went wrong.</Message></Response>');
+    res.status(500).send('<Response><Message>Sorry, something went wrong. Please try again.</Message></Response>');
   }
 });
 
