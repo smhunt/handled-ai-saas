@@ -1,11 +1,15 @@
 // Socket.io Handlers - Real-time chat functionality
 import { Server as SocketServer, Socket } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
-import jwt from 'jsonwebtoken';
+import { verifyToken, createClerkClient } from '@clerk/backend';
 import { handleConversation } from './conversation';
 
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// Initialize Clerk client for user lookups
+const clerk = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY!
+});
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -13,6 +17,7 @@ interface AuthenticatedSocket extends Socket {
   conversationId?: string;
   isWidget?: boolean;
   apiKey?: string;
+  clerkUserId?: string;
 }
 
 export function setupSocketHandlers(io: SocketServer) {
@@ -23,17 +28,59 @@ export function setupSocketHandlers(io: SocketServer) {
       const apiKey = socket.handshake.auth.apiKey;
       const conversationId = socket.handshake.auth.conversationId;
 
-      // Dashboard user authentication
+      // Dashboard user authentication (Clerk JWT)
       if (token) {
-        const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-        socket.userId = decoded.userId;
-        
+        // Verify Clerk JWT
+        const payload = await verifyToken(token, {
+          secretKey: process.env.CLERK_SECRET_KEY!
+        });
+        const clerkUserId = payload.sub;
+
+        if (!clerkUserId) {
+          return next(new Error('Invalid token'));
+        }
+
+        socket.clerkUserId = clerkUserId;
+
+        // Find user by clerkId
+        let user = await prisma.user.findFirst({
+          where: { clerkId: clerkUserId },
+          select: { id: true }
+        });
+
+        // If no user with clerkId, try to get Clerk user info and find by email
+        if (!user) {
+          const clerkUser = await clerk.users.getUser(clerkUserId);
+          const email = clerkUser.emailAddresses[0]?.emailAddress;
+
+          if (email) {
+            user = await prisma.user.findUnique({
+              where: { email },
+              select: { id: true }
+            });
+
+            // Link existing user to Clerk if found
+            if (user) {
+              await prisma.user.update({
+                where: { id: user.id },
+                data: { clerkId: clerkUserId }
+              });
+            }
+          }
+        }
+
+        if (!user) {
+          return next(new Error('User not found'));
+        }
+
+        socket.userId = user.id;
+
         // Get user's businesses
         const businessUsers = await prisma.businessUser.findMany({
-          where: { userId: decoded.userId },
+          where: { userId: user.id },
           select: { businessId: true }
         });
-        
+
         if (businessUsers.length > 0) {
           socket.businessId = businessUsers[0].businessId;
         }
