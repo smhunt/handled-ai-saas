@@ -1,9 +1,9 @@
 /**
  * Handled - Embeddable Chat Widget
- * 
+ *
  * Usage: Add this to your website:
  * <script src="https://cdn.handled.ai/widget.js" data-api-key="YOUR_API_KEY"></script>
- * 
+ *
  * Or initialize manually:
  * Handled.init({ apiKey: 'YOUR_API_KEY' });
  */
@@ -24,17 +24,41 @@
     HANDLED_API_URL = currentScript.getAttribute('data-api-url');
   }
 
+  // ============================================
+  // NOTIFICATION SOUND (Base64 encoded, < 2KB)
+  // A short, pleasant notification chime
+  // ============================================
+  const NOTIFICATION_SOUND = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNKaYhAAAAAAD/+9DEAAAHAAGUdAAAIyonr88xggAEmRoYBQKAgGAYP8uD4f5cEMT/Lg+D/ygfD/Lg+H/8oHw/5cHw//KD/y4Ph/+UBg+H//o/y4OAgICAYB8H+D4f/5QEAwD4f/+XB8EAQBAEAwGAfD/lwfD/+UBgGAwD4IBgHwfB8EP/yg/y4Pg+CAIBgGAwfB8P/lAf/lB/lwfB8EAwGAQDAPhgIA//lw/y4Pg+H//8uD4fgQDAYBg+D4f/lAf/ywfD4f/8uH+XD/Lg+D4Pg+CAQBD8EAQDAPg+H/5QGD4fggCD/Lg+H//y4f5cP/+XB8Hwf/8oP8uD4fggEAQDAMH/5QP8uD4fggCA//LggGAQDAMHwQCAIBgGA4D4f/lw/y4f5cH+XB//+XD/Lg+D4f/lAf5cHw//8oP8uH+XD/Lg+CAID/8oHwf/5cHwfBAIBgGAYB8P/ygP8uD4fggEAw/y4Pg+CAIAgGA4Ph//lAf/lg//LB8HwQBAMAwfB8HwfBD/+oD/+XBD/+pD/8sD4f/9QIf/1Af5cP8uD4f/8oD/LgQBAMAwfB//1A//1A/y4fD//8oH/5YP/ywP8uH+XD//qBD/+oD/8sGAYDAMHwfB8Hw//qA//qA/y4fD//+UB/lw/y4f/9QP/9QP8uH+XD4f/8oD/Lh/lw+H/8oD/Lh8P/+oD/+oD/8sHw//1AgCAIBgOD4fD/8oD/Lh/9QH//UD/8sHw//6gP/6gP8uH+XD4f/8oD/Lh/lw+H//qA/y4f5cP8uH/5QP8uH+XD/Lh/+UD/Lh/lw/y4f/lA/y4fD//qA//qBAEAQDAMHw+H/5QP8uHw//6gf/6gf/lg+H//UB//UB/lw/y4fD//lA/y4f5cPh//1A/y4f5cP8uH/5QP8uH+XD/Lh/+UD/Lh/lw/y4f/lA/y4f/8oH/+oH/+oH+XD/8oH/+oEP/9QP/ygf5cP8uHw//6gf/6gf/lg//1A//qA/y4f/lA/5YP8uH+XD/8oH+XD/Lh/lw//KB/lw/y4f5cP/ygf5cP8uH+XD/8oH+XD/+oD/+oEAQBAMAwfD4f/lA/y4fD//qB//qB/+WD4f/9QP/9QP8uH+XD4f/8oH+XD/Lh8P/+oH+XD/Lh/lw//KB/lw/y4f5cP/ygf5cP8uH+XD/8oH+XD/Lh/lw//KB/lw/y4f5cP/ygf5cP/+oD/+oEP/6gf/lA/y4f5cPh//1A//1A//LB8P/+oH/+oH+XD/Lh8P/+UBD//qAQ//6gQBAEAwDA=';
+
+  // ============================================
+  // EMOJI DATA (Common emojis in categories)
+  // ============================================
+  const EMOJI_DATA = {
+    'Smileys': ['😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '😉', '😍', '🥰', '😘', '😋', '😛', '🤔', '🤗', '😎', '🤩', '😏', '😒', '😞', '😢', '😭', '😤', '😠', '🤯', '😱', '🥺'],
+    'People': ['👋', '🤚', '✋', '🖐️', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '👍', '👎', '👏', '🙌', '🤝', '🙏', '💪', '👈', '👉', '👆', '👇', '☝️', '🫵', '🤲', '🫶', '❤️', '🧡', '💛', '💚'],
+    'Nature': ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🌸', '🌺', '🌻', '🌹', '🌷', '🌱', '🌿', '☀️', '🌙', '⭐', '🌈', '💧', '🔥', '❄️', '🍀'],
+    'Food': ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍔', '🍟', '🍕', '🌭', '🥪', '🌮', '🍜', '🍣', '🍩', '🍪', '🎂', '🍰', '☕', '🍵', '🥤'],
+    'Activities': ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🎱', '🏓', '🏸', '🥊', '🎯', '🎮', '🎲', '🎭', '🎨', '🎬', '🎤', '🎧', '🎸', '🎹', '🥁', '🎺', '🏆', '🥇', '🎪', '🎠', '🎡', '🎢'],
+    'Objects': ['📱', '💻', '⌨️', '🖥️', '🖨️', '🖱️', '💡', '🔦', '📷', '🎥', '📺', '📻', '⏰', '⌚', '📅', '✏️', '📝', '📚', '📖', '🔑', '🔒', '💰', '💳', '📦', '📫', '✉️', '📧', '🎁', '🎈', '🎀']
+  };
+
   // Default configuration
   const defaultConfig = {
     apiKey: null,
     position: 'bottom-right',
     primaryColor: '#f97316',
     greeting: 'Hi! How can I help you today?',
+    offlineMessage: "We're currently offline. Leave a message!",
+    buttonText: '',
+    showBusinessName: true,
     placeholder: 'Type a message...',
     showBranding: true,
     autoOpen: false,
     autoOpenDelay: 5000,
-    mobileBreakpoint: 768
+    mobileBreakpoint: 768,
+    // New options
+    darkMode: 'auto', // 'auto', 'light', 'dark'
+    soundEnabled: true
   };
 
   // State
@@ -47,6 +71,10 @@
   let messages = [];
   let unreadCount = 0;
   let businessConfig = null;
+  let soundEnabled = true;
+  let isDarkMode = false;
+  let emojiPickerOpen = false;
+  let pendingAttachment = null;
 
   // ============================================
   // INITIALIZATION
@@ -84,12 +112,20 @@
     // Load saved conversation
     conversationId = sessionStorage.getItem('handled_conversation_id');
 
+    // Load sound preference from localStorage
+    const savedSound = localStorage.getItem('handled_sound_enabled');
+    soundEnabled = savedSound !== null ? savedSound === 'true' : config.soundEnabled;
+
+    // Detect dark mode
+    detectDarkMode();
+    setupDarkModeListener();
+
     // Fetch business config and render
     fetchBusinessConfig().then(() => {
       injectStyles();
       renderWidget();
       setupEventListeners();
-      
+
       if (conversationId) {
         loadConversationHistory();
       }
@@ -107,17 +143,95 @@
     });
   }
 
+  // ============================================
+  // DARK MODE
+  // ============================================
+
+  function detectDarkMode() {
+    if (config.darkMode === 'dark') {
+      isDarkMode = true;
+    } else if (config.darkMode === 'light') {
+      isDarkMode = false;
+    } else {
+      // Auto-detect from system preference
+      isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+  }
+
+  function setupDarkModeListener() {
+    if (config.darkMode === 'auto' && window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        isDarkMode = e.matches;
+        applyDarkMode();
+      });
+    }
+  }
+
+  function applyDarkMode() {
+    const container = document.getElementById('handled-widget-container');
+    if (container) {
+      if (isDarkMode) {
+        container.classList.add('handled-dark');
+      } else {
+        container.classList.remove('handled-dark');
+      }
+    }
+  }
+
+  // ============================================
+  // SOUND NOTIFICATIONS
+  // ============================================
+
+  function playNotificationSound() {
+    if (!soundEnabled || isOpen) return;
+
+    try {
+      const audio = new Audio(NOTIFICATION_SOUND);
+      audio.volume = 0.5;
+      audio.play().catch(() => {
+        // Silently fail if autoplay is blocked
+      });
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  function toggleSound() {
+    soundEnabled = !soundEnabled;
+    localStorage.setItem('handled_sound_enabled', soundEnabled.toString());
+    updateSoundButton();
+  }
+
+  function updateSoundButton() {
+    const btn = document.getElementById('handled-widget-sound-toggle');
+    if (btn) {
+      btn.innerHTML = soundEnabled ? getSoundOnIcon() : getSoundOffIcon();
+      btn.title = soundEnabled ? 'Mute notifications' : 'Unmute notifications';
+    }
+  }
+
+  function getSoundOnIcon() {
+    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>';
+  }
+
+  function getSoundOffIcon() {
+    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>';
+  }
+
   async function fetchBusinessConfig() {
     try {
       const response = await fetch(`${HANDLED_API_URL}/widget/config`, {
         headers: { 'X-API-Key': config.apiKey }
       });
-      
+
       if (response.ok) {
         businessConfig = await response.json();
         // Override config with business settings
         config.primaryColor = businessConfig.primaryColor || config.primaryColor;
         config.greeting = businessConfig.widgetGreeting || config.greeting;
+        config.offlineMessage = businessConfig.widgetOfflineMessage || config.offlineMessage;
+        config.buttonText = businessConfig.widgetButtonText || config.buttonText;
+        config.showBusinessName = businessConfig.widgetShowBusinessName !== false;
         config.position = (businessConfig.widgetPosition || 'BOTTOM_RIGHT').toLowerCase().replace('_', '-');
       }
     } catch (error) {
@@ -135,6 +249,18 @@
       #handled-widget-container {
         --handled-primary: ${config.primaryColor};
         --handled-primary-dark: ${adjustColor(config.primaryColor, -20)};
+        --handled-bg: #ffffff;
+        --handled-text: #1f2937;
+        --handled-text-secondary: #6b7280;
+        --handled-user-bubble: var(--handled-primary);
+        --handled-ai-bubble: #ffffff;
+        --handled-ai-bubble-border: #e5e7eb;
+        --handled-border: #e5e7eb;
+        --handled-input-bg: #ffffff;
+        --handled-input-border: #e5e7eb;
+        --handled-messages-bg: #f9fafb;
+        --handled-card-bg: #ffffff;
+        --handled-card-footer-bg: #f9fafb;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         font-size: 14px;
         line-height: 1.5;
@@ -142,6 +268,22 @@
         z-index: 999999;
         ${config.position.includes('right') ? 'right: 20px;' : 'left: 20px;'}
         ${config.position.includes('bottom') ? 'bottom: 20px;' : 'top: 20px;'}
+      }
+
+      /* Dark Mode Variables */
+      #handled-widget-container.handled-dark {
+        --handled-bg: #1a1a1a;
+        --handled-text: #e5e5e5;
+        --handled-text-secondary: #a1a1aa;
+        --handled-user-bubble: #ea580c;
+        --handled-ai-bubble: #2d2d2d;
+        --handled-ai-bubble-border: #404040;
+        --handled-border: #404040;
+        --handled-input-bg: #2d2d2d;
+        --handled-input-border: #404040;
+        --handled-messages-bg: #1a1a1a;
+        --handled-card-bg: #2d2d2d;
+        --handled-card-footer-bg: #252525;
       }
 
       #handled-widget-button {
@@ -193,12 +335,13 @@
         width: 380px;
         height: 520px;
         max-height: calc(100vh - 120px);
-        background: white;
+        background: var(--handled-bg);
         border-radius: 16px;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
         display: none;
         flex-direction: column;
         overflow: hidden;
+        border: 1px solid var(--handled-border);
       }
 
       #handled-widget-window.open {
@@ -240,6 +383,13 @@
         width: 24px;
         height: 24px;
         fill: white;
+      }
+
+      #handled-widget-header-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
       }
 
       #handled-widget-header-info {
@@ -288,7 +438,7 @@
         display: flex;
         flex-direction: column;
         gap: 12px;
-        background: #f9fafb;
+        background: var(--handled-messages-bg);
       }
 
       .handled-message {
@@ -300,16 +450,16 @@
 
       .handled-message-user {
         align-self: flex-end;
-        background: var(--handled-primary);
+        background: var(--handled-user-bubble);
         color: white;
         border-bottom-right-radius: 4px;
       }
 
       .handled-message-assistant {
         align-self: flex-start;
-        background: white;
-        color: #1f2937;
-        border: 1px solid #e5e7eb;
+        background: var(--handled-ai-bubble);
+        color: var(--handled-text);
+        border: 1px solid var(--handled-ai-bubble-border);
         border-bottom-left-radius: 4px;
       }
 
@@ -337,6 +487,92 @@
         white-space: pre-wrap;
       }
 
+      /* Images in messages */
+      .handled-message-content img {
+        max-width: 100%;
+        border-radius: 8px;
+        margin: 8px 0;
+        display: block;
+      }
+
+      .handled-message-image {
+        max-width: 200px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .handled-message-image:hover {
+        transform: scale(1.02);
+      }
+
+      .handled-message-content a {
+        color: var(--handled-primary);
+        text-decoration: none;
+      }
+
+      .handled-message-content a:hover {
+        text-decoration: underline;
+      }
+
+      .handled-message-user .handled-message-content a {
+        color: white;
+        text-decoration: underline;
+      }
+
+      /* Image grid for multiple images */
+      .handled-image-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin: 8px 0;
+      }
+
+      .handled-image-grid img {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+
+      /* Message Grouping - consecutive messages from same sender */
+      .handled-message-grouped {
+        margin-top: -8px;
+      }
+
+      .handled-message-grouped .handled-message-time {
+        display: none;
+      }
+
+      /* User message grouping - adjust corners for visual continuity */
+      .handled-message-user.handled-message-group-start {
+        border-bottom-right-radius: 4px;
+      }
+
+      .handled-message-user.handled-message-group-middle {
+        border-top-right-radius: 4px;
+        border-bottom-right-radius: 4px;
+      }
+
+      .handled-message-user.handled-message-group-end {
+        border-top-right-radius: 4px;
+      }
+
+      /* Assistant message grouping */
+      .handled-message-assistant.handled-message-group-start {
+        border-bottom-left-radius: 4px;
+      }
+
+      .handled-message-assistant.handled-message-group-middle {
+        border-top-left-radius: 4px;
+        border-bottom-left-radius: 4px;
+      }
+
+      .handled-message-assistant.handled-message-group-end {
+        border-top-left-radius: 4px;
+      }
+
       .handled-quick-replies {
         display: flex;
         flex-wrap: wrap;
@@ -346,7 +582,7 @@
       }
 
       .handled-quick-reply {
-        background: white;
+        background: var(--handled-bg);
         border: 1px solid var(--handled-primary);
         color: var(--handled-primary);
         padding: 8px 16px;
@@ -364,9 +600,9 @@
 
       /* Rich Confirmation Cards */
       .handled-card {
-        background: white;
+        background: var(--handled-card-bg);
         border-radius: 12px;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--handled-border);
         overflow: hidden;
         max-width: 90%;
         align-self: flex-start;
@@ -415,7 +651,7 @@
         display: flex;
         justify-content: space-between;
         padding: 8px 0;
-        border-bottom: 1px solid #f3f4f6;
+        border-bottom: 1px solid var(--handled-border);
       }
 
       .handled-card-row:last-child {
@@ -423,12 +659,12 @@
       }
 
       .handled-card-label {
-        color: #6b7280;
+        color: var(--handled-text-secondary);
         font-size: 13px;
       }
 
       .handled-card-value {
-        color: #1f2937;
+        color: var(--handled-text);
         font-weight: 500;
         font-size: 13px;
         text-align: right;
@@ -459,11 +695,11 @@
       }
 
       .handled-card-footer {
-        background: #f9fafb;
+        background: var(--handled-card-footer-bg);
         padding: 12px 16px;
         font-size: 12px;
-        color: #6b7280;
-        border-top: 1px solid #e5e7eb;
+        color: var(--handled-text-secondary);
+        border-top: 1px solid var(--handled-border);
       }
 
       .handled-card-items {
@@ -478,16 +714,16 @@
       }
 
       .handled-card-item-name {
-        color: #374151;
+        color: var(--handled-text);
       }
 
       .handled-card-item-qty {
-        color: #6b7280;
+        color: var(--handled-text-secondary);
         margin-left: 4px;
       }
 
       .handled-card-item-price {
-        color: #1f2937;
+        color: var(--handled-text);
         font-weight: 500;
       }
 
@@ -496,12 +732,12 @@
         justify-content: space-between;
         padding: 12px 0 0;
         margin-top: 8px;
-        border-top: 2px solid #e5e7eb;
+        border-top: 2px solid var(--handled-border);
         font-weight: 600;
       }
 
       .handled-card-total-label {
-        color: #374151;
+        color: var(--handled-text);
       }
 
       .handled-card-total-value {
@@ -511,21 +747,35 @@
 
       #handled-widget-typing {
         align-self: flex-start;
-        padding: 12px 16px;
-        background: white;
-        border: 1px solid #e5e7eb;
+        padding: 10px 14px;
+        background: var(--handled-ai-bubble);
+        border: 1px solid var(--handled-ai-bubble-border);
         border-radius: 16px;
+        border-bottom-left-radius: 4px;
         display: none;
+        align-items: center;
+        gap: 8px;
       }
 
       #handled-widget-typing.visible {
         display: flex;
-        gap: 4px;
+      }
+
+      #handled-widget-typing-text {
+        font-size: 13px;
+        color: var(--handled-text-secondary);
+        font-weight: 500;
+      }
+
+      .handled-typing-dots {
+        display: flex;
+        gap: 3px;
+        align-items: center;
       }
 
       .handled-typing-dot {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         background: #9ca3af;
         border-radius: 50%;
         animation: handled-typing 1.4s infinite;
@@ -536,29 +786,70 @@
 
       @keyframes handled-typing {
         0%, 60%, 100% { transform: translateY(0); }
-        30% { transform: translateY(-4px); }
+        30% { transform: translateY(-3px); }
       }
 
       #handled-widget-input-container {
         padding: 12px 16px;
-        background: white;
-        border-top: 1px solid #e5e7eb;
+        background: var(--handled-bg);
+        border-top: 1px solid var(--handled-border);
         display: flex;
         gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      #handled-widget-input-row {
+        display: flex;
+        gap: 8px;
+        flex: 1;
+        align-items: center;
       }
 
       #handled-widget-input {
         flex: 1;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--handled-input-border);
         border-radius: 24px;
         padding: 10px 16px;
         font-size: 14px;
         outline: none;
         transition: border-color 0.2s;
+        background: var(--handled-input-bg);
+        color: var(--handled-text);
+      }
+
+      #handled-widget-input::placeholder {
+        color: var(--handled-text-secondary);
       }
 
       #handled-widget-input:focus {
         border-color: var(--handled-primary);
+      }
+
+      /* Input action buttons */
+      .handled-input-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--handled-text-secondary);
+        transition: all 0.2s;
+        flex-shrink: 0;
+      }
+
+      .handled-input-btn:hover {
+        background: var(--handled-messages-bg);
+        color: var(--handled-text);
+      }
+
+      .handled-input-btn svg {
+        width: 20px;
+        height: 20px;
       }
 
       #handled-widget-send {
@@ -593,13 +884,190 @@
         text-align: center;
         padding: 8px;
         font-size: 11px;
-        color: #9ca3af;
-        background: white;
+        color: var(--handled-text-secondary);
+        background: var(--handled-bg);
       }
 
       #handled-widget-branding a {
-        color: #6b7280;
+        color: var(--handled-text-secondary);
         text-decoration: none;
+      }
+
+      /* Sound toggle button in header */
+      #handled-widget-sound-toggle {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+        padding: 4px;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #handled-widget-sound-toggle:hover {
+        opacity: 1;
+      }
+
+      /* Emoji Picker Styles */
+      #handled-emoji-picker {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        right: 0;
+        background: var(--handled-bg);
+        border: 1px solid var(--handled-border);
+        border-radius: 12px;
+        margin-bottom: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        display: none;
+        flex-direction: column;
+        max-height: 280px;
+        overflow: hidden;
+      }
+
+      #handled-emoji-picker.open {
+        display: flex;
+      }
+
+      .handled-emoji-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--handled-border);
+        background: var(--handled-messages-bg);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .handled-emoji-tabs::-webkit-scrollbar {
+        display: none;
+      }
+
+      .handled-emoji-tab {
+        padding: 8px 12px;
+        font-size: 12px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        color: var(--handled-text-secondary);
+        white-space: nowrap;
+        transition: all 0.2s;
+      }
+
+      .handled-emoji-tab:hover,
+      .handled-emoji-tab.active {
+        color: var(--handled-primary);
+        background: var(--handled-bg);
+      }
+
+      .handled-emoji-grid {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 2px;
+        padding: 8px;
+        overflow-y: auto;
+        max-height: 200px;
+      }
+
+      .handled-emoji-btn {
+        padding: 6px;
+        font-size: 20px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: background 0.2s;
+        text-align: center;
+      }
+
+      .handled-emoji-btn:hover {
+        background: var(--handled-messages-bg);
+      }
+
+      /* Attachment Preview */
+      #handled-attachment-preview {
+        width: 100%;
+        padding: 8px 0;
+        display: none;
+      }
+
+      #handled-attachment-preview.visible {
+        display: block;
+      }
+
+      .handled-attachment-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        background: var(--handled-messages-bg);
+        border-radius: 8px;
+        position: relative;
+      }
+
+      .handled-attachment-thumb {
+        width: 48px;
+        height: 48px;
+        border-radius: 6px;
+        object-fit: cover;
+      }
+
+      .handled-attachment-info {
+        flex: 1;
+        overflow: hidden;
+      }
+
+      .handled-attachment-name {
+        font-size: 13px;
+        color: var(--handled-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .handled-attachment-size {
+        font-size: 11px;
+        color: var(--handled-text-secondary);
+      }
+
+      .handled-attachment-remove {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #ef4444;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Hidden file input */
+      #handled-file-input {
+        display: none;
+      }
+
+      /* Image message styling */
+      .handled-message-image-container {
+        margin-top: 8px;
+      }
+
+      .handled-message-image-container img {
+        max-width: 200px;
+        max-height: 200px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .handled-message-image-container img:hover {
+        transform: scale(1.02);
       }
 
       @media (max-width: ${config.mobileBreakpoint}px) {
@@ -624,7 +1092,7 @@
     container.id = 'handled-widget-container';
     
     container.innerHTML = `
-      <button id="handled-widget-button" aria-label="Open chat">
+      <button id="handled-widget-button" aria-label="${escapeHtml(config.buttonText || 'Open chat')}" title="${escapeHtml(config.buttonText || '')}">
         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
         </svg>
@@ -634,14 +1102,18 @@
       <div id="handled-widget-window">
         <div id="handled-widget-header">
           <div id="handled-widget-header-avatar">
-            <svg viewBox="0 0 24 24">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-            </svg>
+            ${businessConfig?.logoUrl
+              ? `<img src="${escapeHtml(businessConfig.logoUrl)}" alt="${escapeHtml(businessConfig.businessName || 'Logo')}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><svg viewBox="0 0 24 24" style="display:none"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>`
+              : `<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>`
+            }
           </div>
           <div id="handled-widget-header-info">
-            <div id="handled-widget-header-name">${businessConfig?.name || 'Chat'}</div>
+            ${config.showBusinessName ? `<div id="handled-widget-header-name">${escapeHtml(businessConfig?.businessName || 'Chat')}</div>` : ''}
             <div id="handled-widget-header-status">Online now</div>
           </div>
+          <button id="handled-widget-sound-toggle" aria-label="Toggle sound" title="${soundEnabled ? 'Mute notifications' : 'Unmute notifications'}">
+            ${soundEnabled ? getSoundOnIcon() : getSoundOffIcon()}
+          </button>
           <button id="handled-widget-close" aria-label="Close chat">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -652,16 +1124,44 @@
 
         <div id="handled-widget-messages">
           <div id="handled-widget-typing">
-            <span class="handled-typing-dot"></span>
-            <span class="handled-typing-dot"></span>
-            <span class="handled-typing-dot"></span>
+            <span id="handled-widget-typing-text">typing</span>
+            <span class="handled-typing-dots">
+              <span class="handled-typing-dot"></span>
+              <span class="handled-typing-dot"></span>
+              <span class="handled-typing-dot"></span>
+            </span>
           </div>
         </div>
 
-        <div id="handled-widget-input-container">
-          <input 
-            type="text" 
-            id="handled-widget-input" 
+        <div id="handled-widget-input-container" style="position: relative;">
+          <div id="handled-emoji-picker">
+            <div class="handled-emoji-tabs">
+              ${Object.keys(EMOJI_DATA).map((cat, i) => `<button class="handled-emoji-tab${i === 0 ? ' active' : ''}" data-category="${cat}">${cat}</button>`).join('')}
+            </div>
+            <div class="handled-emoji-grid" id="handled-emoji-grid">
+              ${EMOJI_DATA['Smileys'].map(e => `<button class="handled-emoji-btn">${e}</button>`).join('')}
+            </div>
+          </div>
+          <div id="handled-attachment-preview"></div>
+          <input type="file" id="handled-file-input" accept="image/*" />
+          <button class="handled-input-btn" id="handled-attach-btn" aria-label="Attach image" title="Attach image">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+          </button>
+          <button class="handled-input-btn" id="handled-emoji-btn" aria-label="Add emoji" title="Add emoji">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+              <line x1="9" y1="9" x2="9.01" y2="9"></line>
+              <line x1="15" y1="9" x2="15.01" y2="9"></line>
+            </svg>
+          </button>
+          <input
+            type="text"
+            id="handled-widget-input"
             placeholder="${config.placeholder}"
             autocomplete="off"
           />
@@ -681,17 +1181,23 @@
     `;
 
     document.body.appendChild(container);
+
+    // Apply dark mode class if needed
+    applyDarkMode();
   }
 
   function setupEventListeners() {
     // Toggle button
     document.getElementById('handled-widget-button').addEventListener('click', toggleWidget);
-    
+
     // Close button
     document.getElementById('handled-widget-close').addEventListener('click', closeWidget);
 
+    // Sound toggle button
+    document.getElementById('handled-widget-sound-toggle').addEventListener('click', toggleSound);
+
     // Send button
-    document.getElementById('handled-widget-send').addEventListener('click', sendMessage);
+    document.getElementById('handled-widget-send').addEventListener('click', () => sendMessage());
 
     // Input enter key
     document.getElementById('handled-widget-input').addEventListener('keypress', (e) => {
@@ -703,10 +1209,164 @@
 
     // Close on escape
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        closeWidget();
+      if (e.key === 'Escape') {
+        if (emojiPickerOpen) {
+          closeEmojiPicker();
+        } else if (isOpen) {
+          closeWidget();
+        }
       }
     });
+
+    // Emoji picker button
+    document.getElementById('handled-emoji-btn').addEventListener('click', toggleEmojiPicker);
+
+    // Emoji picker tab clicks
+    document.querySelectorAll('.handled-emoji-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        const category = e.target.dataset.category;
+        selectEmojiCategory(category);
+      });
+    });
+
+    // Emoji clicks
+    document.getElementById('handled-emoji-grid').addEventListener('click', (e) => {
+      if (e.target.classList.contains('handled-emoji-btn')) {
+        insertEmoji(e.target.textContent);
+      }
+    });
+
+    // Close emoji picker when clicking outside
+    document.addEventListener('click', (e) => {
+      if (emojiPickerOpen) {
+        const picker = document.getElementById('handled-emoji-picker');
+        const emojiBtn = document.getElementById('handled-emoji-btn');
+        if (!picker.contains(e.target) && !emojiBtn.contains(e.target)) {
+          closeEmojiPicker();
+        }
+      }
+    });
+
+    // File attachment button
+    document.getElementById('handled-attach-btn').addEventListener('click', () => {
+      document.getElementById('handled-file-input').click();
+    });
+
+    // File input change
+    document.getElementById('handled-file-input').addEventListener('change', handleFileSelect);
+  }
+
+  // ============================================
+  // EMOJI PICKER
+  // ============================================
+
+  function toggleEmojiPicker() {
+    if (emojiPickerOpen) {
+      closeEmojiPicker();
+    } else {
+      openEmojiPicker();
+    }
+  }
+
+  function openEmojiPicker() {
+    emojiPickerOpen = true;
+    document.getElementById('handled-emoji-picker').classList.add('open');
+  }
+
+  function closeEmojiPicker() {
+    emojiPickerOpen = false;
+    document.getElementById('handled-emoji-picker').classList.remove('open');
+  }
+
+  function selectEmojiCategory(category) {
+    // Update active tab
+    document.querySelectorAll('.handled-emoji-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.category === category);
+    });
+
+    // Update emoji grid
+    const grid = document.getElementById('handled-emoji-grid');
+    grid.innerHTML = EMOJI_DATA[category].map(e => `<button class="handled-emoji-btn">${e}</button>`).join('');
+  }
+
+  function insertEmoji(emoji) {
+    const input = document.getElementById('handled-widget-input');
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const text = input.value;
+    input.value = text.substring(0, start) + emoji + text.substring(end);
+    input.focus();
+    input.selectionStart = input.selectionEnd = start + emoji.length;
+    closeEmojiPicker();
+  }
+
+  // ============================================
+  // FILE ATTACHMENTS
+  // ============================================
+
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Only accept images
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      return;
+    }
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be smaller than 5MB.');
+      return;
+    }
+
+    // Read file as base64
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      pendingAttachment = {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        data: e.target.result
+      };
+      showAttachmentPreview();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function showAttachmentPreview() {
+    const preview = document.getElementById('handled-attachment-preview');
+    const sizeKB = Math.round(pendingAttachment.size / 1024);
+    const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
+
+    preview.innerHTML = `
+      <div class="handled-attachment-item">
+        <img src="${pendingAttachment.data}" alt="Preview" class="handled-attachment-thumb" />
+        <div class="handled-attachment-info">
+          <div class="handled-attachment-name">${escapeHtml(pendingAttachment.name)}</div>
+          <div class="handled-attachment-size">${sizeStr}</div>
+        </div>
+        <button class="handled-attachment-remove" id="handled-remove-attachment" aria-label="Remove attachment">x</button>
+      </div>
+    `;
+    preview.classList.add('visible');
+
+    // Add remove handler
+    document.getElementById('handled-remove-attachment').addEventListener('click', removeAttachment);
+  }
+
+  function removeAttachment() {
+    pendingAttachment = null;
+    const preview = document.getElementById('handled-attachment-preview');
+    preview.innerHTML = '';
+    preview.classList.remove('visible');
+    document.getElementById('handled-file-input').value = '';
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
   // ============================================
@@ -808,16 +1468,27 @@
   async function sendMessage() {
     const input = document.getElementById('handled-widget-input');
     const content = input.value.trim();
-    
-    if (!content) return;
+    const hasAttachment = pendingAttachment !== null;
+
+    if (!content && !hasAttachment) return;
 
     input.value = '';
     document.getElementById('handled-widget-send').disabled = true;
 
+    // Build message content with attachment
+    let messageContent = content;
+    let attachmentData = null;
+
+    if (hasAttachment) {
+      attachmentData = { ...pendingAttachment };
+      removeAttachment();
+    }
+
     // Add user message immediately
     addMessage({
       role: 'USER',
-      content,
+      content: messageContent,
+      attachment: attachmentData,
       createdAt: new Date().toISOString()
     });
 
@@ -825,6 +1496,16 @@
     showTyping();
 
     try {
+      // Build request body
+      const requestBody = { content: messageContent, visitorId };
+      if (attachmentData) {
+        requestBody.attachment = {
+          name: attachmentData.name,
+          type: attachmentData.type,
+          data: attachmentData.data
+        };
+      }
+
       const response = await fetch(
         `${HANDLED_API_URL}/widget/conversations/${conversationId}/messages`,
         {
@@ -833,7 +1514,7 @@
             'Content-Type': 'application/json',
             'X-API-Key': config.apiKey
           },
-          body: JSON.stringify({ content, visitorId })
+          body: JSON.stringify(requestBody)
         }
       );
 
@@ -883,6 +1564,10 @@
     const existingReplies = container.querySelector('.handled-quick-replies');
     if (existingReplies) existingReplies.remove();
 
+    // Check if this message should be grouped with the previous one
+    const prevMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+    const isGrouped = prevMessage && prevMessage.role === message.role;
+
     // Check if this is a confirmation message that should be rendered as a card
     const confirmationType = message.role === 'ASSISTANT'
       ? detectConfirmationType(message.content)
@@ -891,19 +1576,52 @@
     const div = document.createElement('div');
 
     if (confirmationType) {
-      // Render as a rich card
+      // Render as a rich card (cards don't participate in grouping)
       div.innerHTML = renderConfirmationCard(message.content, confirmationType);
     } else {
       // Use markdown parsing for assistant messages, plain text for user
-      const content = message.role === 'ASSISTANT'
+      let content = message.role === 'ASSISTANT'
         ? parseMarkdown(message.content)
         : escapeHtml(message.content);
 
-      div.className = `handled-message handled-message-${message.role.toLowerCase()}`;
+      // Add attachment image if present
+      let attachmentHtml = '';
+      if (message.attachment && message.attachment.data) {
+        attachmentHtml = `
+          <div class="handled-message-image-container">
+            <img src="${message.attachment.data}" alt="${escapeHtml(message.attachment.name)}" />
+          </div>
+        `;
+      }
+
+      // Build class list with grouping
+      let classes = `handled-message handled-message-${message.role.toLowerCase()}`;
+      if (isGrouped) {
+        classes += ' handled-message-grouped handled-message-group-end';
+      }
+
+      div.className = classes;
       div.innerHTML = `
-        <div class="handled-message-content">${content}</div>
+        ${content ? `<div class="handled-message-content">${content}</div>` : ''}
+        ${attachmentHtml}
         <div class="handled-message-time">${formatTime(message.createdAt)}</div>
       `;
+
+      // Update previous message's grouping class if this is grouped
+      if (isGrouped) {
+        const allMessages = container.querySelectorAll('.handled-message');
+        const prevDiv = allMessages[allMessages.length - 1];
+        if (prevDiv) {
+          // Update previous message from standalone/end to start/middle
+          if (prevDiv.classList.contains('handled-message-group-end')) {
+            prevDiv.classList.remove('handled-message-group-end');
+            prevDiv.classList.add('handled-message-group-middle');
+          } else if (!prevDiv.classList.contains('handled-message-group-start') &&
+                     !prevDiv.classList.contains('handled-message-group-middle')) {
+            prevDiv.classList.add('handled-message-group-start');
+          }
+        }
+      }
     }
 
     container.insertBefore(div, typing);
@@ -916,10 +1634,11 @@
 
     if (scroll) scrollToBottom();
 
-    // Update unread count if window closed
+    // Update unread count and play sound if window closed
     if (!isOpen && message.role === 'ASSISTANT') {
       unreadCount++;
       updateBadge();
+      playNotificationSound();
     }
   }
 
@@ -961,7 +1680,14 @@
   }
 
   function showTyping() {
-    document.getElementById('handled-widget-typing').classList.add('visible');
+    const typingEl = document.getElementById('handled-widget-typing');
+    const typingText = document.getElementById('handled-widget-typing-text');
+
+    // Set the business name in the typing indicator
+    const businessName = businessConfig?.businessName || 'Assistant';
+    typingText.textContent = `${businessName} is typing`;
+
+    typingEl.classList.add('visible');
     scrollToBottom();
   }
 
@@ -1109,7 +1835,7 @@
     const isBooking = type === 'booking';
     const icon = isBooking ? '📅' : '🛒';
     const title = isBooking ? 'Booking Confirmed' : 'Order Confirmed';
-    const businessName = businessConfig?.name || 'Business';
+    const businessName = businessConfig?.businessName || 'Business';
 
     let cardHtml = `
       <div class="handled-card">
@@ -1217,6 +1943,18 @@
     // Escape HTML first for security
     let html = escapeHtml(text);
 
+    // Images: ![alt](url) - only allow http/https URLs for security
+    html = html.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g, (match, alt, url) => {
+      // Validate URL is an image-like URL (basic check)
+      const safeAlt = alt.replace(/"/g, '&quot;');
+      return `<img src="${url}" alt="${safeAlt}" class="handled-message-image" loading="lazy">`;
+    });
+
+    // Links: [text](url)
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (match, text, url) => {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    });
+
     // Bold: **text** or __text__
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
@@ -1307,6 +2045,40 @@
       const input = document.getElementById('handled-widget-input');
       input.value = message;
       sendMessage();
+    },
+
+    // Sound control
+    mute: function() {
+      soundEnabled = false;
+      localStorage.setItem('handled_sound_enabled', 'false');
+      updateSoundButton();
+    },
+
+    unmute: function() {
+      soundEnabled = true;
+      localStorage.setItem('handled_sound_enabled', 'true');
+      updateSoundButton();
+    },
+
+    isMuted: function() {
+      return !soundEnabled;
+    },
+
+    // Dark mode control
+    setDarkMode: function(mode) {
+      if (mode === 'dark') {
+        isDarkMode = true;
+      } else if (mode === 'light') {
+        isDarkMode = false;
+      } else {
+        // Auto mode
+        isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      applyDarkMode();
+    },
+
+    isDarkMode: function() {
+      return isDarkMode;
     }
   };
 

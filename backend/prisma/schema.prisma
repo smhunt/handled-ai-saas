@@ -74,11 +74,18 @@ model Business {
 
   // SMS Settings (Twilio)
   twilioPhoneNumber String?  // Business's Twilio number for SMS conversations
-  
+
+  // WhatsApp Settings (Twilio)
+  whatsappPhoneNumber String?         // Business's WhatsApp number (e.g., whatsapp:+1234567890)
+  whatsappEnabled     Boolean @default(false)
+  whatsappTemplateApproved Boolean @default(false)  // Whether business has approved message templates
+
   // Widget settings
-  widgetPosition  WidgetPosition @default(BOTTOM_RIGHT)
-  widgetGreeting  String   @default("Hi! How can I help you today?")
-  widgetOfflineMessage String @default("We're currently offline. Leave a message and we'll get back to you!")
+  widgetPosition       WidgetPosition @default(BOTTOM_RIGHT)
+  widgetGreeting       String   @default("Hi! How can I help you today?")
+  widgetOfflineMessage String   @default("We're currently offline. Leave a message and we'll get back to you!")
+  widgetButtonText     String?  // Optional custom button text
+  widgetShowBusinessName Boolean @default(true)
 
   // Mobile config settings
   allowFullScreenChat Boolean @default(true)
@@ -116,7 +123,9 @@ model Business {
   notifications   NotificationSetting[]
   integrations    Integration[]
   analytics       AnalyticsEvent[]
-  
+  webhookEndpoints WebhookEndpoint[]
+  smsTemplates    SmsTemplate[]
+
   @@index([slug])
 }
 
@@ -682,7 +691,72 @@ model ApiKey {
   expiresAt   DateTime?
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
-  
+
   @@index([key])
   @@index([businessId])
+}
+
+// ============================================================================
+// WEBHOOKS
+// ============================================================================
+
+model WebhookEndpoint {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  url         String
+  secret      String   // For HMAC signature verification
+  events      String[] // ['booking.created', 'order.created', 'conversation.ended', etc.]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  deliveries  WebhookDelivery[]
+
+  @@index([businessId])
+  @@index([isActive])
+}
+
+model WebhookDelivery {
+  id          String    @id @default(cuid())
+  endpointId  String
+  event       String
+  payload     Json
+  statusCode  Int?
+  response    String?   @db.Text
+  attempts    Int       @default(1)
+  success     Boolean   @default(false)
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  endpoint    WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId])
+  @@index([event])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// SMS TEMPLATES
+// ============================================================================
+
+model SmsTemplate {
+  id          String          @id @default(cuid())
+  businessId  String
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  type        SmsTemplateType
+  content     String          @db.Text
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([businessId, type])
+  @@index([businessId])
+}
+
+enum SmsTemplateType {
+  BOOKING_CONFIRMATION
+  ORDER_CONFIRMATION
+  BOOKING_REMINDER
 }

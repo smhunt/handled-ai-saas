@@ -265,10 +265,124 @@ router.post('/twilio/sms', async (req, res) => {
 // Twilio status callback
 router.post('/twilio/status', async (req, res) => {
   const { MessageSid, MessageStatus, To, ErrorCode } = req.body;
-  
+
   console.log(`SMS ${MessageSid} to ${To}: ${MessageStatus}${ErrorCode ? ` (Error: ${ErrorCode})` : ''}`);
-  
+
   res.status(200).send('OK');
+});
+
+// Twilio WhatsApp webhook
+router.post('/twilio/whatsapp', async (req, res) => {
+  try {
+    const { From, To, Body, MessageSid, ProfileName } = req.body;
+
+    // WhatsApp messages come with whatsapp: prefix
+    const fromPhone = From.replace('whatsapp:', '');
+    const toPhone = To.replace('whatsapp:', '');
+
+    console.log(`Incoming WhatsApp from ${fromPhone} to ${toPhone}: ${Body?.substring(0, 50)}...`);
+
+    // Normalize phone number for matching (remove non-digits except +)
+    const normalizedTo = toPhone.replace(/[^\d+]/g, '');
+
+    // Find business by WhatsApp phone number (match last 10 digits)
+    const business = await prisma.business.findFirst({
+      where: {
+        whatsappPhoneNumber: {
+          contains: normalizedTo.slice(-10)
+        },
+        whatsappEnabled: true,
+        isActive: true
+      }
+    });
+
+    if (!business) {
+      console.log(`No business found for WhatsApp number ${toPhone}`);
+      return res.status(200).send('<Response><Message>This WhatsApp number is not currently active.</Message></Response>');
+    }
+
+    // Normalize customer phone number
+    const normalizedFrom = fromPhone.replace(/[^\d+]/g, '');
+
+    // Find or create conversation
+    let conversation = await prisma.conversation.findFirst({
+      where: {
+        businessId: business.id,
+        customerPhone: normalizedFrom,
+        channel: 'WHATSAPP',
+        status: { in: ['ACTIVE', 'WAITING'] }
+      }
+    });
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          businessId: business.id,
+          visitorId: `whatsapp_${normalizedFrom}`,
+          customerPhone: normalizedFrom,
+          customerName: ProfileName || null, // WhatsApp provides profile name
+          channel: 'WHATSAPP',
+          status: 'ACTIVE',
+          metadata: {
+            twilioMessageSid: MessageSid,
+            whatsappSessionStart: new Date().toISOString() // Track 24-hour session window
+          }
+        }
+      });
+
+      // Log analytics event
+      await prisma.analyticsEvent.create({
+        data: {
+          businessId: business.id,
+          eventType: 'whatsapp_conversation_started',
+          visitorId: `whatsapp_${normalizedFrom}`,
+          eventData: { phone: fromPhone, profileName: ProfileName }
+        }
+      });
+    } else {
+      // Update session start time if customer initiates new message (refreshes 24hr window)
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          metadata: {
+            ...(conversation.metadata as any || {}),
+            whatsappSessionStart: new Date().toISOString()
+          }
+        }
+      });
+    }
+
+    // Process with AI
+    const { handleConversation } = await import('../services/conversation');
+    let response = await handleConversation(business.id, conversation.id, Body);
+
+    // Update last message timestamp
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: new Date() }
+    });
+
+    // WhatsApp has a 1600 character limit per message
+    if (response.length > 1500) {
+      response = response.substring(0, 1497) + '...';
+    }
+
+    // WhatsApp supports basic formatting: *bold*, _italic_, ~strikethrough~, ```code```
+    // Keep markdown formatting but convert our standard format to WhatsApp format
+    response = response
+      .replace(/\*\*([^*]+)\*\*/g, '*$1*');  // Convert **bold** to *bold*
+
+    // Send TwiML response
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>${escapeXml(response)}</Message>
+</Response>`;
+
+    res.type('text/xml').send(twiml);
+  } catch (error) {
+    console.error('Twilio WhatsApp webhook error:', error);
+    res.status(500).send('<Response><Message>Sorry, something went wrong. Please try again.</Message></Response>');
+  }
 });
 
 // Generic webhook for integrations

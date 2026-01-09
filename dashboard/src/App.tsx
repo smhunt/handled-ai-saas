@@ -17,7 +17,7 @@ import {
   Plus, Search, Filter, MoreVertical, Check, Clock,
   ChevronDown, Zap, Building2, CreditCard, Globe,
   Briefcase, UtensilsCrossed, HelpCircle, MapPin, Trash2, Pencil, Copy, Key, Shield, Download, Sun, Moon,
-  Eye, Send, Smartphone, Mail, Code, FileCode, Bot, User, Wifi, WifiOff
+  Eye, Send, Smartphone, Mail, Code, FileCode, Bot, User, Wifi, WifiOff, Palette, ExternalLink, MessageCircle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -908,7 +908,8 @@ function ConversationsPage() {
   const channelCounts = {
     ALL: allConversations.length,
     WEB: allConversations.filter((c: any) => c.channel === 'WEB').length,
-    SMS: allConversations.filter((c: any) => c.channel === 'SMS').length
+    SMS: allConversations.filter((c: any) => c.channel === 'SMS').length,
+    WHATSAPP: allConversations.filter((c: any) => c.channel === 'WHATSAPP').length
   }
 
   // Filter conversations based on search, status, and channel
@@ -944,6 +945,32 @@ function ConversationsPage() {
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
     } catch (error) {
       console.error('Failed to send SMS:', error)
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  // Send WhatsApp reply
+  const sendWhatsAppReply = async () => {
+    if (!replyMessage.trim() || !selectedConversation?.customerPhone) return
+
+    setIsSending(true)
+    try {
+      await api('/api/conversations/whatsapp/send', {
+        method: 'POST',
+        body: JSON.stringify({
+          to: selectedConversation.customerPhone,
+          message: replyMessage,
+          businessId: business?.id,
+          conversationId: selectedConversation.id
+        })
+      })
+      setReplyMessage('')
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      toast.success('WhatsApp message sent')
+    } catch (error) {
+      console.error('Failed to send WhatsApp:', error)
+      toast.error('Failed to send WhatsApp message')
     } finally {
       setIsSending(false)
     }
@@ -1033,21 +1060,65 @@ function ConversationsPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => exportToCSV(conversations, 'conversations', [
-              { key: 'customerName', header: 'Customer Name' },
-              { key: 'customerEmail', header: 'Email' },
-              { key: 'customerPhone', header: 'Phone' },
-              { key: 'channel', header: 'Channel' },
-              { key: 'status', header: 'Status' },
-              { key: 'lastMessageAt', header: 'Last Message' },
-              { key: 'createdAt', header: 'Started' }
-            ])}
-            disabled={conversations.length === 0}
-          >
-            <Download className="w-4 h-4 mr-2" /> Export
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={conversations.length === 0}>
+                <Download className="w-4 h-4 mr-2" /> Export
+                <ChevronDown className="w-4 h-4 ml-2" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportToCSV(conversations, 'conversations', [
+                { key: 'customerName', header: 'Customer Name' },
+                { key: 'customerEmail', header: 'Email' },
+                { key: 'customerPhone', header: 'Phone' },
+                { key: 'channel', header: 'Channel' },
+                { key: 'status', header: 'Status' },
+                { key: 'lastMessageAt', header: 'Last Message' },
+                { key: 'createdAt', header: 'Started' }
+              ])}>
+                Quick CSV (without messages)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={async () => {
+                try {
+                  const response = await fetch(
+                    `${API_URL}/api/conversations/${business?.id}/export?format=csv`,
+                    { headers: { Authorization: `Bearer ${authToken}` } }
+                  )
+                  const blob = await response.blob()
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `conversations-full-${new Date().toISOString().split('T')[0]}.csv`
+                  a.click()
+                  toast.success('Export downloaded')
+                } catch (error) {
+                  toast.error('Export failed')
+                }
+              }}>
+                Full CSV (with messages)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={async () => {
+                try {
+                  const response = await fetch(
+                    `${API_URL}/api/conversations/${business?.id}/export?format=json`,
+                    { headers: { Authorization: `Bearer ${authToken}` } }
+                  )
+                  const blob = await response.blob()
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `conversations-full-${new Date().toISOString().split('T')[0]}.json`
+                  a.click()
+                  toast.success('Export downloaded')
+                } catch (error) {
+                  toast.error('Export failed')
+                }
+              }}>
+                Full JSON (with messages)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-32">
               <SelectValue placeholder="Status" />
@@ -1079,6 +1150,11 @@ function ConversationsPage() {
             <Smartphone className="w-4 h-4" />
             SMS
             <Badge variant="secondary" className="ml-1">{channelCounts.SMS}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="WHATSAPP" className="flex items-center gap-2">
+            <MessageCircle className="w-4 h-4" />
+            WhatsApp
+            <Badge variant="secondary" className="ml-1">{channelCounts.WHATSAPP}</Badge>
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -1154,23 +1230,31 @@ function ConversationsPage() {
                         <div className="flex items-center gap-3">
                           <div className="relative">
                             <Avatar>
-                              <AvatarFallback>{conv.customerName?.[0] || (conv.channel === 'SMS' ? 'S' : 'V')}</AvatarFallback>
+                              <AvatarFallback>{conv.customerName?.[0] || (conv.channel === 'SMS' ? 'S' : conv.channel === 'WHATSAPP' ? 'W' : 'V')}</AvatarFallback>
                             </Avatar>
                             {conv.channel === 'SMS' && (
                               <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-0.5">
                                 <Smartphone className="w-3 h-3 text-white" />
                               </div>
                             )}
+                            {conv.channel === 'WHATSAPP' && (
+                              <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full p-0.5">
+                                <MessageCircle className="w-3 h-3 text-white" />
+                              </div>
+                            )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <span className="font-medium truncate">
-                                {conv.customerName || (conv.channel === 'SMS' ? conv.customerPhone : 'Visitor')}
+                                {conv.customerName || (conv.channel === 'SMS' ? conv.customerPhone : conv.channel === 'WHATSAPP' ? conv.customerPhone : 'Visitor')}
                               </span>
                               <span className="text-xs text-stone-500">{format(new Date(conv.lastMessageAt), 'h:mm a')}</span>
                             </div>
                             {conv.channel === 'SMS' && conv.customerPhone && !conv.customerName && (
                               <p className="text-xs text-green-600 dark:text-green-400 font-medium">SMS</p>
+                            )}
+                            {conv.channel === 'WHATSAPP' && conv.customerPhone && !conv.customerName && (
+                              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">WhatsApp</p>
                             )}
                             <p className="text-sm text-stone-500 truncate">{conv.messages?.[0]?.content || 'No messages'}</p>
                           </div>
@@ -1182,6 +1266,11 @@ function ConversationsPage() {
                           {conv.channel === 'SMS' && (
                             <Badge variant="outline" className="text-xs text-green-600 border-green-300">
                               <Smartphone className="w-3 h-3 mr-1" /> SMS
+                            </Badge>
+                          )}
+                          {conv.channel === 'WHATSAPP' && (
+                            <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-300">
+                              <MessageCircle className="w-3 h-3 mr-1" /> WhatsApp
                             </Badge>
                           )}
                           {conv.handedOffToHuman && (
@@ -1207,7 +1296,7 @@ function ConversationsPage() {
                     <div className="relative">
                       <Avatar>
                         <AvatarFallback>
-                          {selectedConversation.customerName?.[0] || (selectedConversation.channel === 'SMS' ? 'S' : 'V')}
+                          {selectedConversation.customerName?.[0] || (selectedConversation.channel === 'SMS' ? 'S' : selectedConversation.channel === 'WHATSAPP' ? 'W' : 'V')}
                         </AvatarFallback>
                       </Avatar>
                       {selectedConversation.channel === 'SMS' && (
@@ -1215,16 +1304,26 @@ function ConversationsPage() {
                           <Smartphone className="w-3 h-3 text-white" />
                         </div>
                       )}
+                      {selectedConversation.channel === 'WHATSAPP' && (
+                        <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full p-0.5">
+                          <MessageCircle className="w-3 h-3 text-white" />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <CardTitle className="text-lg">
-                        {selectedConversation.customerName || (selectedConversation.channel === 'SMS' ? selectedConversation.customerPhone : 'Visitor')}
+                        {selectedConversation.customerName || (selectedConversation.channel === 'SMS' || selectedConversation.channel === 'WHATSAPP' ? selectedConversation.customerPhone : 'Visitor')}
                       </CardTitle>
                       <CardDescription className="flex items-center gap-2">
                         {selectedConversation.channel === 'SMS' ? (
                           <>
                             <Smartphone className="w-3 h-3 text-green-600" />
                             <span className="text-green-600">{selectedConversation.customerPhone}</span>
+                          </>
+                        ) : selectedConversation.channel === 'WHATSAPP' ? (
+                          <>
+                            <MessageCircle className="w-3 h-3 text-emerald-600" />
+                            <span className="text-emerald-600">{selectedConversation.customerPhone}</span>
                           </>
                         ) : (
                           selectedConversation.customerEmail || selectedConversation.customerPhone || 'No contact info'
@@ -1233,9 +1332,17 @@ function ConversationsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge className={selectedConversation.channel === 'SMS' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : ''}>
+                    <Badge className={
+                      selectedConversation.channel === 'SMS'
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        : selectedConversation.channel === 'WHATSAPP'
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
+                        : ''
+                    }>
                       {selectedConversation.channel === 'SMS' ? (
                         <><Smartphone className="w-3 h-3 mr-1" /> SMS</>
+                      ) : selectedConversation.channel === 'WHATSAPP' ? (
+                        <><MessageCircle className="w-3 h-3 mr-1" /> WhatsApp</>
                       ) : (
                         <><Globe className="w-3 h-3 mr-1" /> Web</>
                       )}
@@ -1263,6 +1370,8 @@ function ConversationsPage() {
                           msg.role === 'USER'
                             ? selectedConversation.channel === 'SMS'
                               ? 'bg-green-500 text-white'
+                              : selectedConversation.channel === 'WHATSAPP'
+                              ? 'bg-emerald-500 text-white'
                               : 'bg-orange-500 text-white'
                             : 'bg-stone-100 dark:bg-stone-800 text-stone-900 dark:text-stone-100'
                         }`}>
@@ -1313,6 +1422,31 @@ function ConversationsPage() {
                           className="bg-green-600 hover:bg-green-700"
                         >
                           {isSending ? 'Sending...' : <><Send className="w-4 h-4 mr-1" /> Send SMS</>}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-stone-500">{replyMessage.length}/1600 characters</p>
+                    </div>
+                  ) : selectedConversation.channel === 'WHATSAPP' ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                        <MessageCircle className="w-4 h-4" />
+                        <span>Send WhatsApp to {selectedConversation.customerPhone}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Type a WhatsApp message..."
+                          className="flex-1"
+                          value={replyMessage}
+                          onChange={(e) => setReplyMessage(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendWhatsAppReply()}
+                          maxLength={1600}
+                        />
+                        <Button
+                          onClick={sendWhatsAppReply}
+                          disabled={!replyMessage.trim() || isSending}
+                          className="bg-emerald-600 hover:bg-emerald-700"
+                        >
+                          {isSending ? 'Sending...' : <><Send className="w-4 h-4 mr-1" /> Send WhatsApp</>}
                         </Button>
                       </div>
                       <p className="text-xs text-stone-500">{replyMessage.length}/1600 characters</p>
@@ -2420,7 +2554,7 @@ function SettingsPage() {
 
   // Get active tab from URL or default to 'business'
   const activeTab = searchParams.get('tab') || 'business'
-  const validTabs = ['business', 'services', 'menu', 'faqs', 'team', 'locations', 'widget', 'ai', 'billing']
+  const validTabs = ['business', 'services', 'menu', 'faqs', 'team', 'locations', 'widget', 'ai', 'notifications', 'webhooks', 'billing']
   const currentTab = validTabs.includes(activeTab) ? activeTab : 'business'
 
   // Update URL when tab changes
@@ -2474,6 +2608,20 @@ function SettingsPage() {
   const { data: usageData } = useQuery({
     queryKey: ['usage', business?.id],
     queryFn: () => api(`/api/billing/${business?.id}/usage`),
+    enabled: !!business?.id
+  })
+
+  // SMS Templates data
+  const { data: smsTemplatesData, isLoading: templatesLoading } = useQuery({
+    queryKey: ['smsTemplates', business?.id],
+    queryFn: () => api(`/api/businesses/${business?.id}/sms-templates`),
+    enabled: !!business?.id
+  })
+
+  // Webhooks data
+  const { data: webhooksData, isLoading: webhooksLoading } = useQuery({
+    queryKey: ['webhooks', business?.id],
+    queryFn: () => api(`/api/webhooks-config/${business?.id}`),
     enabled: !!business?.id
   })
 
@@ -2564,6 +2712,84 @@ function SettingsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['apiKeys', business?.id] })
   })
 
+  // SMS Template mutations
+  const updateTemplateMutation = useMutation({
+    mutationFn: (data: { type: string; content: string }) =>
+      api(`/api/businesses/${business?.id}/sms-templates/${data.type}`, {
+        method: 'PUT',
+        body: JSON.stringify({ content: data.content })
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['smsTemplates', business?.id] })
+      setEditingTemplate(null)
+      toast.success('Template saved successfully')
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to save template')
+    }
+  })
+
+  const resetTemplateMutation = useMutation({
+    mutationFn: (type: string) =>
+      api(`/api/businesses/${business?.id}/sms-templates/${type}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['smsTemplates', business?.id] })
+      toast.success('Template reset to default')
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to reset template')
+    }
+  })
+
+  // Webhook mutations
+  const createWebhookMutation = useMutation({
+    mutationFn: (data: any) => api(`/api/webhooks-config/${business?.id}`, { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['webhooks', business?.id] })
+      setNewWebhookSecret(data.secret)
+      toast.success('Webhook endpoint created. Save your secret!')
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to create webhook')
+    }
+  })
+
+  const deleteWebhookMutation = useMutation({
+    mutationFn: (id: string) => api(`/api/webhooks-config/${business?.id}/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhooks', business?.id] })
+      toast.success('Webhook endpoint deleted')
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to delete webhook')
+    }
+  })
+
+  const updateWebhookMutation = useMutation({
+    mutationFn: (data: any) => api(`/api/webhooks-config/${business?.id}/${data.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhooks', business?.id] })
+      toast.success('Webhook endpoint updated')
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to update webhook')
+    }
+  })
+
+  const testWebhookMutation = useMutation({
+    mutationFn: (id: string) => api(`/api/webhooks-config/${business?.id}/${id}/test`, { method: 'POST' }),
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(`Test webhook sent! Status: ${data.statusCode}`)
+      } else {
+        toast.error(`Test failed: ${data.message}`)
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to test webhook')
+    }
+  })
+
   // Form states
   const [newService, setNewService] = useState({ name: '', description: '', duration: 30, price: 0 })
   const [editingService, setEditingService] = useState<any>(null)
@@ -2574,6 +2800,16 @@ function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('STAFF')
   const [newApiKeyName, setNewApiKeyName] = useState('')
+
+  // Webhook form state
+  const [newWebhook, setNewWebhook] = useState({ name: '', url: '', events: [] as string[] })
+  const [newWebhookSecret, setNewWebhookSecret] = useState<string | null>(null)
+  const webhookEndpoints = webhooksData?.endpoints || []
+  const availableWebhookEvents = webhooksData?.availableEvents || []
+
+  // SMS Template editing state
+  const [editingTemplate, setEditingTemplate] = useState<string | null>(null)
+  const [templateContent, setTemplateContent] = useState('')
 
   // Business info form state
   const [businessInfo, setBusinessInfo] = useState({
@@ -2587,7 +2823,11 @@ function SettingsPage() {
   // Widget settings form state
   const [widgetSettings, setWidgetSettings] = useState({
     widgetGreeting: '',
-    primaryColor: '#f97316'
+    primaryColor: '#f97316',
+    widgetPosition: 'BOTTOM_RIGHT' as 'BOTTOM_RIGHT' | 'BOTTOM_LEFT',
+    widgetOfflineMessage: "We're currently offline. Leave a message and we'll get back to you!",
+    widgetButtonText: '',
+    widgetShowBusinessName: true
   })
 
   // Mobile config settings
@@ -2696,7 +2936,11 @@ function SettingsPage() {
       })
       setWidgetSettings({
         widgetGreeting: business.widgetGreeting || "Hi! How can I help you today?",
-        primaryColor: business.primaryColor || '#f97316'
+        primaryColor: business.primaryColor || '#f97316',
+        widgetPosition: business.widgetPosition || 'BOTTOM_RIGHT',
+        widgetOfflineMessage: business.widgetOfflineMessage || "We're currently offline. Leave a message and we'll get back to you!",
+        widgetButtonText: business.widgetButtonText || '',
+        widgetShowBusinessName: business.widgetShowBusinessName !== false
       })
       setAiSettings({
         aiPersonality: business.aiPersonality || 'friendly',
@@ -2732,7 +2976,10 @@ function SettingsPage() {
           <TabsTrigger value="team"><Users className="w-4 h-4 mr-2" />Team</TabsTrigger>
           <TabsTrigger value="locations"><MapPin className="w-4 h-4 mr-2" />Locations</TabsTrigger>
           <TabsTrigger value="widget"><Globe className="w-4 h-4 mr-2" />Widget</TabsTrigger>
+          <TabsTrigger value="channels"><MessageCircle className="w-4 h-4 mr-2" />Channels</TabsTrigger>
           <TabsTrigger value="ai"><Zap className="w-4 h-4 mr-2" />AI</TabsTrigger>
+          <TabsTrigger value="notifications"><Bell className="w-4 h-4 mr-2" />Notifications</TabsTrigger>
+          <TabsTrigger value="webhooks"><Wifi className="w-4 h-4 mr-2" />Webhooks</TabsTrigger>
           <TabsTrigger value="billing"><CreditCard className="w-4 h-4 mr-2" />Billing</TabsTrigger>
         </TabsList>
 
@@ -3349,38 +3596,295 @@ function SettingsPage() {
 
         {/* Widget Tab */}
         <TabsContent value="widget" className="mt-6 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Chat Widget</CardTitle>
-              <CardDescription>Customize your chat widget appearance</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Greeting Message</Label>
-                <Textarea
-                  value={widgetSettings.widgetGreeting}
-                  onChange={e => setWidgetSettings({...widgetSettings, widgetGreeting: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Primary Color</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={widgetSettings.primaryColor}
-                    onChange={e => setWidgetSettings({...widgetSettings, primaryColor: e.target.value})}
-                    className="w-32"
-                  />
-                  <div className="w-10 h-10 rounded-lg" style={{ background: widgetSettings.primaryColor }} />
-                </div>
-              </div>
+          {/* Widget Customization with Live Preview */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column - Settings */}
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Palette className="w-5 h-5" />
+                    Appearance
+                  </CardTitle>
+                  <CardDescription>Customize how your widget looks</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Primary Color */}
+                  <div className="space-y-3">
+                    <Label>Primary Color</Label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {/* Preset Colors */}
+                      {[
+                        { color: '#f97316', name: 'Orange' },
+                        { color: '#3b82f6', name: 'Blue' },
+                        { color: '#22c55e', name: 'Green' },
+                        { color: '#8b5cf6', name: 'Purple' },
+                        { color: '#ec4899', name: 'Pink' },
+                        { color: '#ef4444', name: 'Red' },
+                        { color: '#06b6d4', name: 'Cyan' },
+                        { color: '#84cc16', name: 'Lime' },
+                      ].map(({ color, name }) => (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`w-10 h-10 rounded-lg border-2 transition-all hover:scale-105 ${
+                            widgetSettings.primaryColor.toLowerCase() === color.toLowerCase()
+                              ? 'border-stone-900 ring-2 ring-stone-900 ring-offset-2'
+                              : 'border-transparent'
+                          }`}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setWidgetSettings({ ...widgetSettings, primaryColor: color })}
+                          title={name}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <div className="relative">
+                        <Input
+                          value={widgetSettings.primaryColor}
+                          onChange={e => setWidgetSettings({...widgetSettings, primaryColor: e.target.value})}
+                          className="w-32 font-mono text-sm"
+                          placeholder="#f97316"
+                        />
+                      </div>
+                      <div
+                        className="w-10 h-10 rounded-lg border border-stone-200 shadow-inner"
+                        style={{ backgroundColor: widgetSettings.primaryColor }}
+                      />
+                      <input
+                        type="color"
+                        value={widgetSettings.primaryColor}
+                        onChange={e => setWidgetSettings({...widgetSettings, primaryColor: e.target.value})}
+                        className="w-10 h-10 rounded-lg border-0 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Widget Position */}
+                  <div className="space-y-3">
+                    <Label>Widget Position</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          widgetSettings.widgetPosition === 'BOTTOM_RIGHT'
+                            ? 'border-orange-500 bg-orange-50'
+                            : 'border-stone-200 hover:border-stone-300'
+                        }`}
+                        onClick={() => setWidgetSettings({ ...widgetSettings, widgetPosition: 'BOTTOM_RIGHT' })}
+                      >
+                        <div className="h-16 bg-stone-100 rounded relative mb-2">
+                          <div
+                            className="absolute bottom-1 right-1 w-5 h-5 rounded-full"
+                            style={{ backgroundColor: widgetSettings.primaryColor }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium">Bottom Right</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          widgetSettings.widgetPosition === 'BOTTOM_LEFT'
+                            ? 'border-orange-500 bg-orange-50'
+                            : 'border-stone-200 hover:border-stone-300'
+                        }`}
+                        onClick={() => setWidgetSettings({ ...widgetSettings, widgetPosition: 'BOTTOM_LEFT' })}
+                      >
+                        <div className="h-16 bg-stone-100 rounded relative mb-2">
+                          <div
+                            className="absolute bottom-1 left-1 w-5 h-5 rounded-full"
+                            style={{ backgroundColor: widgetSettings.primaryColor }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium">Bottom Left</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Toggle Options */}
+                  <div className="space-y-4 pt-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-sm font-medium">Show Business Name</Label>
+                        <p className="text-sm text-stone-500">Display your business name in the widget header</p>
+                      </div>
+                      <Switch
+                        checked={widgetSettings.widgetShowBusinessName}
+                        onCheckedChange={(checked) => setWidgetSettings({...widgetSettings, widgetShowBusinessName: checked})}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5" />
+                    Messages
+                  </CardTitle>
+                  <CardDescription>Customize widget messages and text</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Greeting Message</Label>
+                    <Textarea
+                      value={widgetSettings.widgetGreeting}
+                      onChange={e => setWidgetSettings({...widgetSettings, widgetGreeting: e.target.value})}
+                      placeholder="Hi! How can I help you today?"
+                      rows={2}
+                    />
+                    <p className="text-xs text-stone-500">First message visitors see when they open the widget</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Offline Message</Label>
+                    <Textarea
+                      value={widgetSettings.widgetOfflineMessage}
+                      onChange={e => setWidgetSettings({...widgetSettings, widgetOfflineMessage: e.target.value})}
+                      placeholder="We're currently offline. Leave a message!"
+                      rows={2}
+                    />
+                    <p className="text-xs text-stone-500">Shown when your business is outside operating hours</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Button Text (Optional)</Label>
+                    <Input
+                      value={widgetSettings.widgetButtonText}
+                      onChange={e => setWidgetSettings({...widgetSettings, widgetButtonText: e.target.value})}
+                      placeholder="Chat with us"
+                    />
+                    <p className="text-xs text-stone-500">Custom tooltip text for the chat button</p>
+                  </div>
+                </CardContent>
+              </Card>
+
               <Button
                 onClick={() => updateBusinessMutation.mutate(widgetSettings)}
                 disabled={updateBusinessMutation.isPending}
+                className="w-full"
+                size="lg"
               >
                 {updateBusinessMutation.isPending ? 'Saving...' : 'Save Widget Settings'}
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+
+            {/* Right Column - Live Preview */}
+            <div className="lg:sticky lg:top-6 h-fit">
+              <Card className="overflow-hidden">
+                <CardHeader className="border-b bg-stone-50">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Eye className="w-4 h-4" />
+                    Live Preview
+                  </CardTitle>
+                  <CardDescription>See how your widget will look on your website</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {/* Mock Browser Window */}
+                  <div className="bg-gradient-to-br from-stone-100 to-stone-200 p-6 min-h-[500px] relative">
+                    {/* Mini website mockup */}
+                    <div className="space-y-3 max-w-[200px]">
+                      <div className="h-4 bg-stone-300 rounded w-3/4"></div>
+                      <div className="h-3 bg-stone-200 rounded"></div>
+                      <div className="h-3 bg-stone-200 rounded w-5/6"></div>
+                      <div className="h-3 bg-stone-200 rounded w-4/6"></div>
+                      <div className="h-8 bg-stone-300 rounded w-24 mt-4"></div>
+                    </div>
+
+                    {/* Widget Preview */}
+                    <div
+                      className={`absolute bottom-4 ${widgetSettings.widgetPosition === 'BOTTOM_LEFT' ? 'left-4' : 'right-4'}`}
+                      style={{ transform: 'scale(0.75)', transformOrigin: widgetSettings.widgetPosition === 'BOTTOM_LEFT' ? 'bottom left' : 'bottom right' }}
+                    >
+                      {/* Chat Window */}
+                      <div className="w-[320px] bg-white rounded-2xl shadow-2xl overflow-hidden border mb-3">
+                        {/* Header */}
+                        <div
+                          className="p-3 text-white"
+                          style={{ backgroundColor: widgetSettings.primaryColor }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
+                                <MessageSquare className="w-5 h-5" />
+                              </div>
+                              <div>
+                                {widgetSettings.widgetShowBusinessName && (
+                                  <div className="font-semibold text-sm">{business?.name || 'Your Business'}</div>
+                                )}
+                                <div className="text-xs opacity-90 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+                                  Online
+                                </div>
+                              </div>
+                            </div>
+                            <X className="w-4 h-4 opacity-70" />
+                          </div>
+                        </div>
+                        {/* Messages */}
+                        <div className="h-48 p-3 bg-stone-50">
+                          <div className="flex gap-2">
+                            <div
+                              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0"
+                              style={{ backgroundColor: widgetSettings.primaryColor }}
+                            >
+                              AI
+                            </div>
+                            <div className="bg-white rounded-xl rounded-tl-none p-2.5 shadow-sm text-sm max-w-[220px]">
+                              {widgetSettings.widgetGreeting || "Hi! How can I help you today?"}
+                            </div>
+                          </div>
+                        </div>
+                        {/* Input */}
+                        <div className="p-2 bg-white border-t flex gap-2">
+                          <div className="flex-1 bg-stone-100 rounded-full px-3 py-1.5 text-xs text-stone-400">
+                            Type a message...
+                          </div>
+                          <div
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-white"
+                            style={{ backgroundColor: widgetSettings.primaryColor }}
+                          >
+                            <Send className="w-3 h-3" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Chat Button */}
+                      <div
+                        className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-white cursor-pointer hover:scale-105 transition-transform ${widgetSettings.widgetPosition === 'BOTTOM_LEFT' ? '' : 'ml-auto'}`}
+                        style={{ backgroundColor: widgetSettings.primaryColor }}
+                        title={widgetSettings.widgetButtonText || 'Chat with us'}
+                      >
+                        <MessageSquare className="w-6 h-6" />
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quick Actions */}
+              <div className="mt-4 flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowWidgetPreview(true)}
+                >
+                  <Eye className="w-4 h-4 mr-2" /> Full Preview
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    if (apiKeys[0]?.key) {
+                      window.open(`/widget-test.html?apiKey=${apiKeys[0].key}`, '_blank')
+                    }
+                  }}
+                  disabled={!apiKeys[0]?.key}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" /> Test on Page
+                </Button>
+              </div>
+            </div>
+          </div>
 
           <Card>
             <CardHeader>
@@ -3770,6 +4274,135 @@ function SettingsPage() {
               )}
         </TabsContent>
 
+        {/* Channels Tab - SMS and WhatsApp Settings */}
+        <TabsContent value="channels" className="mt-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="w-5 h-5 text-emerald-600" />
+                WhatsApp Integration
+              </CardTitle>
+              <CardDescription>Enable WhatsApp messaging for customer conversations</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-950 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
+                    <MessageCircle className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-emerald-800 dark:text-emerald-200">WhatsApp Business</h4>
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                      {business?.whatsappEnabled ? 'Connected and active' : 'Not configured'}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={business?.whatsappEnabled || false}
+                  onCheckedChange={(checked) => {
+                    updateBusinessMutation.mutate({ whatsappEnabled: checked })
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>WhatsApp Phone Number</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={business?.whatsappPhoneNumber || ''}
+                    onChange={(e) => {
+                      // Will be saved on blur or button click
+                    }}
+                    placeholder="+1234567890"
+                    className="flex-1"
+                    disabled={!business?.whatsappEnabled}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const input = document.querySelector('input[placeholder="+1234567890"]') as HTMLInputElement
+                      if (input?.value) {
+                        updateBusinessMutation.mutate({ whatsappPhoneNumber: input.value })
+                      }
+                    }}
+                    disabled={!business?.whatsappEnabled || updateBusinessMutation.isPending}
+                  >
+                    Save
+                  </Button>
+                </div>
+                <p className="text-xs text-stone-500">
+                  Your Twilio WhatsApp-enabled phone number. Must be approved for WhatsApp messaging.
+                </p>
+              </div>
+
+              {business?.whatsappEnabled && (
+                <div className="p-4 bg-stone-50 dark:bg-stone-800 rounded-lg space-y-3">
+                  <h4 className="font-medium text-sm">Webhook Configuration</h4>
+                  <p className="text-xs text-stone-500">
+                    Configure your Twilio WhatsApp webhook to point to:
+                  </p>
+                  <code className="block p-2 bg-white dark:bg-stone-900 rounded border text-xs overflow-x-auto">
+                    {API_URL}/webhooks/twilio/whatsapp
+                  </code>
+                  <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                    <Bell className="w-4 h-4" />
+                    <span>WhatsApp has a 24-hour session window. After 24 hours of inactivity, only template messages can be sent.</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-green-600" />
+                SMS Integration
+              </CardTitle>
+              <CardDescription>SMS messaging is powered by Twilio</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                    <Smartphone className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-green-800 dark:text-green-200">SMS Messaging</h4>
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      {business?.twilioPhoneNumber ? 'Connected' : 'Not configured'}
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-green-600 border-green-300">
+                  {business?.twilioPhoneNumber || 'No number'}
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Twilio Phone Number</Label>
+                <Input
+                  value={business?.twilioPhoneNumber || ''}
+                  disabled
+                  placeholder="Contact support to configure SMS"
+                />
+                <p className="text-xs text-stone-500">
+                  SMS phone numbers are configured by our team. Contact support to set up SMS messaging.
+                </p>
+              </div>
+
+              {business?.twilioPhoneNumber && (
+                <div className="p-4 bg-stone-50 dark:bg-stone-800 rounded-lg space-y-3">
+                  <h4 className="font-medium text-sm">SMS Webhook</h4>
+                  <code className="block p-2 bg-white dark:bg-stone-900 rounded border text-xs overflow-x-auto">
+                    {API_URL}/webhooks/twilio/sms
+                  </code>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* AI Tab */}
         <TabsContent value="ai" className="mt-6">
           <Card>
@@ -3818,6 +4451,388 @@ function SettingsPage() {
               >
                 {updateBusinessMutation.isPending ? 'Saving...' : 'Save AI Settings'}
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Notifications Tab - SMS Templates */}
+        <TabsContent value="notifications" className="mt-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>SMS Templates</CardTitle>
+              <CardDescription>Customize the SMS messages sent to your customers for booking confirmations, order confirmations, and reminders</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {templatesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {(smsTemplatesData?.templates || []).map((template: any) => (
+                    <div key={template.type} className="border rounded-lg p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium text-stone-900">{template.label}</h3>
+                          <p className="text-sm text-stone-500">
+                            {template.isCustom ? 'Custom template' : 'Using default template'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {template.isCustom && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => resetTemplateMutation.mutate(template.type)}
+                              disabled={resetTemplateMutation.isPending}
+                            >
+                              Reset to Default
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingTemplate(template.type)
+                              setTemplateContent(template.content)
+                            }}
+                          >
+                            <Pencil className="w-4 h-4 mr-2" />
+                            Edit
+                          </Button>
+                        </div>
+                      </div>
+
+                      {editingTemplate === template.type ? (
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label>Template Content</Label>
+                            <Textarea
+                              value={templateContent}
+                              onChange={(e) => setTemplateContent(e.target.value)}
+                              rows={3}
+                              className="font-mono text-sm"
+                              placeholder="Enter your SMS template..."
+                            />
+                            <p className="text-sm text-stone-500">
+                              {templateContent.length}/160 characters
+                              {templateContent.length > 160 && (
+                                <span className="text-amber-600 ml-2">(may be split into multiple messages)</span>
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Available Variables</Label>
+                            <div className="flex flex-wrap gap-2">
+                              {template.variables?.map((v: any) => (
+                                <Button
+                                  key={v.name}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setTemplateContent(prev => prev + `{{${v.name}}}`)}
+                                  className="text-xs"
+                                  title={v.description}
+                                >
+                                  {`{{${v.name}}}`}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 p-3 bg-stone-50 rounded-lg">
+                            <Label className="text-sm font-medium">Preview</Label>
+                            <p className="text-sm text-stone-700 font-mono">
+                              {template.preview || 'Enter template content to see preview'}
+                            </p>
+                          </div>
+
+                          {template.validation?.warnings?.length > 0 && (
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                              <p className="text-sm text-amber-700 font-medium">Warnings:</p>
+                              <ul className="text-sm text-amber-600 list-disc list-inside mt-1">
+                                {template.validation.warnings.map((w: string, i: number) => (
+                                  <li key={i}>{w}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => updateTemplateMutation.mutate({
+                                type: template.type,
+                                content: templateContent
+                              })}
+                              disabled={updateTemplateMutation.isPending}
+                            >
+                              {updateTemplateMutation.isPending ? 'Saving...' : 'Save Template'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setEditingTemplate(null)
+                                setTemplateContent('')
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="p-3 bg-stone-50 rounded-lg">
+                            <p className="text-sm text-stone-700 font-mono">{template.content}</p>
+                          </div>
+                          <div className="p-3 bg-blue-50 rounded-lg">
+                            <p className="text-xs text-blue-600 font-medium mb-1">Preview with sample data:</p>
+                            <p className="text-sm text-blue-800">{template.preview}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="pt-4 border-t">
+                <h3 className="font-medium text-stone-900 mb-2">Variable Reference</h3>
+                <p className="text-sm text-stone-500 mb-4">
+                  Use these variables in your templates. They will be replaced with actual values when the message is sent.
+                </p>
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-1">
+                    <p><code className="bg-stone-100 px-1 rounded">{`{{businessName}}`}</code> - Your business name</p>
+                    <p><code className="bg-stone-100 px-1 rounded">{`{{customerName}}`}</code> - Customer's name</p>
+                    <p><code className="bg-stone-100 px-1 rounded">{`{{date}}`}</code> - Booking date (e.g., Jan 15)</p>
+                    <p><code className="bg-stone-100 px-1 rounded">{`{{time}}`}</code> - Booking/order time</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p><code className="bg-stone-100 px-1 rounded">{`{{partySize}}`}</code> - Number of guests</p>
+                    <p><code className="bg-stone-100 px-1 rounded">{`{{confirmationCode}}`}</code> - Booking confirmation code</p>
+                    <p><code className="bg-stone-100 px-1 rounded">{`{{orderNumber}}`}</code> - Order number</p>
+                    <p><code className="bg-stone-100 px-1 rounded">{`{{total}}`}</code> - Order total amount</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Webhooks Tab */}
+        <TabsContent value="webhooks" className="mt-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Webhook Endpoints</CardTitle>
+              <CardDescription>Send real-time notifications to external services when events occur</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Create new webhook form */}
+              <div className="border rounded-lg p-4 mb-6 bg-stone-50 dark:bg-stone-900">
+                <h3 className="font-medium mb-4">Add Webhook Endpoint</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Name</Label>
+                    <Input
+                      placeholder="My Webhook"
+                      value={newWebhook.name}
+                      onChange={(e) => setNewWebhook({ ...newWebhook, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>URL</Label>
+                    <Input
+                      placeholder="https://example.com/webhook"
+                      value={newWebhook.url}
+                      onChange={(e) => setNewWebhook({ ...newWebhook, url: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <Label>Events to Subscribe</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {availableWebhookEvents.map((event: string) => (
+                      <label key={event} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={newWebhook.events.includes(event)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setNewWebhook({ ...newWebhook, events: [...newWebhook.events, event] })
+                            } else {
+                              setNewWebhook({ ...newWebhook, events: newWebhook.events.filter(e => e !== event) })
+                            }
+                          }}
+                        />
+                        <span className="text-stone-600 dark:text-stone-400">{event}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  className="mt-4"
+                  onClick={() => {
+                    if (newWebhook.name && newWebhook.url && newWebhook.events.length > 0) {
+                      createWebhookMutation.mutate(newWebhook)
+                      setNewWebhook({ name: '', url: '', events: [] })
+                    } else {
+                      toast.error('Please fill in all fields and select at least one event')
+                    }
+                  }}
+                  disabled={createWebhookMutation.isPending}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  {createWebhookMutation.isPending ? 'Creating...' : 'Add Webhook'}
+                </Button>
+              </div>
+
+              {/* Show secret if just created */}
+              {newWebhookSecret && (
+                <div className="border border-orange-200 bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 mb-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="w-5 h-5 text-orange-600" />
+                    <span className="font-medium text-orange-800 dark:text-orange-200">Webhook Secret</span>
+                  </div>
+                  <p className="text-sm text-orange-700 dark:text-orange-300 mb-2">
+                    Copy this secret now - it will not be shown again!
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-stone-200 dark:bg-stone-800 px-3 py-2 rounded font-mono text-sm flex-1 overflow-x-auto">
+                      {newWebhookSecret}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(newWebhookSecret)
+                        toast.success('Secret copied to clipboard')
+                      }}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => setNewWebhookSecret(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              )}
+
+              {/* Webhook endpoints list */}
+              <div className="space-y-4">
+                {webhooksLoading ? (
+                  <div className="text-center py-8 text-stone-500">Loading webhooks...</div>
+                ) : webhookEndpoints.length === 0 ? (
+                  <div className="text-center py-8 text-stone-500">
+                    <Wifi className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No webhook endpoints configured</p>
+                    <p className="text-sm">Add your first webhook above to get started</p>
+                  </div>
+                ) : (
+                  webhookEndpoints.map((endpoint: any) => (
+                    <div key={endpoint.id} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${endpoint.isActive ? 'bg-green-500' : 'bg-stone-400'}`} />
+                          <span className="font-medium">{endpoint.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => testWebhookMutation.mutate(endpoint.id)}
+                            disabled={testWebhookMutation.isPending}
+                          >
+                            <Send className="w-4 h-4 mr-1" />
+                            Test
+                          </Button>
+                          <Switch
+                            checked={endpoint.isActive}
+                            onCheckedChange={(checked) => {
+                              updateWebhookMutation.mutate({ id: endpoint.id, isActive: checked })
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this webhook?')) {
+                                deleteWebhookMutation.mutate(endpoint.id)
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="text-sm text-stone-600 dark:text-stone-400 mb-2 font-mono truncate">
+                        {endpoint.url}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {endpoint.events.map((event: string) => (
+                          <Badge key={event} variant="outline" className="text-xs">
+                            {event}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Webhook Documentation */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Webhook Integration Guide</CardTitle>
+              <CardDescription>How to receive and verify webhooks</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h4 className="font-medium mb-2">Payload Format</h4>
+                <pre className="bg-stone-100 dark:bg-stone-900 p-3 rounded-lg text-sm overflow-x-auto">
+{`{
+  "event": "booking.created",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "businessId": "your-business-id",
+  "data": {
+    // Event-specific data
+  }
+}`}
+                </pre>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Signature Verification</h4>
+                <p className="text-sm text-stone-600 dark:text-stone-400 mb-2">
+                  Each webhook request includes an <code className="bg-stone-200 dark:bg-stone-800 px-1 rounded">X-Webhook-Signature</code> header.
+                  Verify it using HMAC-SHA256:
+                </p>
+                <pre className="bg-stone-100 dark:bg-stone-900 p-3 rounded-lg text-sm overflow-x-auto">
+{`const crypto = require('crypto');
+
+const signature = req.headers['x-webhook-signature'];
+const payload = JSON.stringify(req.body);
+const expected = crypto
+  .createHmac('sha256', YOUR_WEBHOOK_SECRET)
+  .update(payload)
+  .digest('hex');
+
+if (signature !== expected) {
+  return res.status(401).send('Invalid signature');
+}`}
+                </pre>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Retry Policy</h4>
+                <p className="text-sm text-stone-600 dark:text-stone-400">
+                  Failed webhooks are retried up to 3 times with exponential backoff (1s, 5s, 30s).
+                  Ensure your endpoint returns a 2xx status code to confirm delivery.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

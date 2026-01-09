@@ -177,6 +177,8 @@ router.get('/config', async (req, res) => {
         widgetPosition: true,
         widgetGreeting: true,
         widgetOfflineMessage: true,
+        widgetButtonText: true,
+        widgetShowBusinessName: true,
         industry: true
       }
     });
@@ -210,6 +212,8 @@ router.get('/config', async (req, res) => {
       widgetPosition: business.widgetPosition,
       widgetGreeting: business.widgetGreeting,
       widgetOfflineMessage: business.widgetOfflineMessage,
+      widgetButtonText: business.widgetButtonText,
+      widgetShowBusinessName: business.widgetShowBusinessName,
       industry: business.industry,
       isOpen,
       currentTime: now.toISOString()
@@ -282,10 +286,14 @@ router.post('/conversations', checkUsageLimit('conversations'), async (req, res)
 router.post('/conversations/:conversationId/messages', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { content, visitorId } = req.body;
+    const { content, visitorId, attachment } = req.body;
 
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ error: 'Message content required' });
+    // Allow empty content if there's an attachment
+    const hasContent = content && content.trim().length > 0;
+    const hasAttachment = attachment && attachment.data;
+
+    if (!hasContent && !hasAttachment) {
+      return res.status(400).json({ error: 'Message content or attachment required' });
     }
 
     // Verify conversation belongs to this business
@@ -300,9 +308,31 @@ router.post('/conversations/:conversationId/messages', async (req, res) => {
       return res.status(404).json({ error: 'Conversation not found' });
     }
 
+    // Build message content
+    let messageContent = content || '';
+
+    // If there's an attachment, add note about it to the content for the AI
+    if (hasAttachment) {
+      const attachmentNote = `[User sent an image: ${attachment.name}]`;
+      messageContent = messageContent
+        ? `${messageContent}\n\n${attachmentNote}`
+        : attachmentNote;
+    }
+
+    // Build metadata for the message
+    const messageMetadata: any = {};
+    if (hasAttachment) {
+      messageMetadata.attachment = {
+        name: attachment.name,
+        type: attachment.type,
+        // Store base64 data (in production, you'd upload to S3/CloudStorage)
+        data: attachment.data
+      };
+    }
+
     // Check if user wants to return to AI
     const returnToAiPhrases = ['talk to ai', 'talk to bot', 'go back', 'return to assistant', 'back to ai', 'ai help', 'restart'];
-    const wantsToReturnToAi = returnToAiPhrases.some(phrase => content.toLowerCase().includes(phrase));
+    const wantsToReturnToAi = hasContent && returnToAiPhrases.some(phrase => content.toLowerCase().includes(phrase));
 
     // If conversation was handed off, check if user wants to return to AI
     if (conversation.handedOffToHuman) {
@@ -323,7 +353,8 @@ router.post('/conversations/:conversationId/messages', async (req, res) => {
           data: {
             conversationId,
             role: 'USER',
-            content
+            content: messageContent,
+            metadata: Object.keys(messageMetadata).length > 0 ? messageMetadata : undefined
           }
         });
 
@@ -341,11 +372,11 @@ router.post('/conversations/:conversationId/messages', async (req, res) => {
       }
     }
 
-    // Process with AI
+    // Process with AI (pass the content which includes attachment note)
     const aiResponse = await handleConversation(
       req.businessId,
       conversationId,
-      content
+      messageContent
     );
 
     // Log analytics
@@ -355,12 +386,15 @@ router.post('/conversations/:conversationId/messages', async (req, res) => {
         eventType: 'message_sent',
         visitorId,
         sessionId: conversationId,
-        eventData: { messageLength: content.length }
+        eventData: {
+          messageLength: messageContent.length,
+          hasAttachment: hasAttachment
+        }
       }
     });
 
     // Generate contextual quick replies based on response
-    const quickReplies = generateQuickReplies(aiResponse, content);
+    const quickReplies = generateQuickReplies(aiResponse, content || '');
 
     res.json({
       response: aiResponse,
@@ -443,14 +477,72 @@ router.get('/conversations/:conversationId/messages', async (req, res) => {
         id: true,
         role: true,
         content: true,
+        metadata: true,
         createdAt: true
       }
     });
 
-    res.json(messages);
+    // Transform messages to include attachment data if present
+    const transformedMessages = messages.map(msg => ({
+      ...msg,
+      attachment: (msg.metadata as any)?.attachment || null
+    }));
+
+    res.json(transformedMessages);
   } catch (error) {
     console.error('Get messages error:', error);
     res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// Upload file attachment (standalone endpoint for larger files)
+router.post('/conversations/:conversationId/attachments', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { name, type, data } = req.body;
+
+    if (!name || !type || !data) {
+      return res.status(400).json({ error: 'Attachment name, type, and data required' });
+    }
+
+    // Verify conversation belongs to this business
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        businessId: req.businessId
+      }
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    // Validate file type (only images for now)
+    if (!type.startsWith('image/')) {
+      return res.status(400).json({ error: 'Only image files are supported' });
+    }
+
+    // Validate file size (max 5MB base64)
+    const base64Size = data.length * 0.75; // Approximate size in bytes
+    if (base64Size > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File size must be less than 5MB' });
+    }
+
+    // In production, you would upload to S3/CloudStorage and return URL
+    // For now, we just validate and return the data URL
+    const attachmentUrl = data; // In production: await uploadToStorage(data)
+
+    res.json({
+      success: true,
+      attachment: {
+        name,
+        type,
+        url: attachmentUrl
+      }
+    });
+  } catch (error) {
+    console.error('Upload attachment error:', error);
+    res.status(500).json({ error: 'Failed to upload attachment' });
   }
 });
 

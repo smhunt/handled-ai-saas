@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
+import { triggerWebhooks } from '../services/webhookService';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -71,7 +72,7 @@ router.get('/:businessId/:id', async (req, res) => {
 // Update order status
 router.patch('/:businessId/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    const { businessId, id } = req.params;
     const { status, estimatedReady } = req.body;
 
     const updateData: any = {};
@@ -84,8 +85,17 @@ router.patch('/:businessId/:id', async (req, res) => {
     const order = await prisma.order.update({
       where: { id },
       data: updateData,
-      include: { items: true }
+      include: { items: true, location: true }
     });
+
+    // Trigger webhooks based on status change
+    if (status === 'COMPLETED') {
+      triggerWebhooks(businessId, 'order.completed', order);
+    } else if (status === 'CANCELLED') {
+      triggerWebhooks(businessId, 'order.cancelled', order);
+    } else {
+      triggerWebhooks(businessId, 'order.updated', order);
+    }
 
     res.json(order);
   } catch (error) {

@@ -2,8 +2,9 @@
 import nodemailer from 'nodemailer';
 import twilio from 'twilio';
 import jwt from 'jsonwebtoken';
-import { PrismaClient, NotificationType, NotificationChannel } from '@prisma/client';
+import { PrismaClient, NotificationType, NotificationChannel, SmsTemplateType } from '@prisma/client';
 import { format } from 'date-fns';
+import { interpolateTemplate, DEFAULT_TEMPLATES } from './templateEngine';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -26,6 +27,68 @@ const twilioClient = process.env.TWILIO_ACCOUNT_SID
   : null;
 
 const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER;
+
+// ============================================
+// SMS TEMPLATE HELPER
+// ============================================
+
+/**
+ * Get the SMS template content for a business - uses custom template if available,
+ * otherwise falls back to default template
+ */
+async function getSmsTemplate(
+  businessId: string,
+  type: SmsTemplateType
+): Promise<string> {
+  const customTemplate = await prisma.smsTemplate.findUnique({
+    where: {
+      businessId_type: {
+        businessId,
+        type
+      }
+    },
+    select: { content: true, isActive: true }
+  });
+
+  // Use custom template if it exists and is active
+  if (customTemplate?.isActive && customTemplate.content) {
+    return customTemplate.content;
+  }
+
+  // Fall back to default template
+  return DEFAULT_TEMPLATES[type];
+}
+
+/**
+ * Build variables for booking confirmation SMS
+ */
+function buildBookingVariables(booking: any, businessName: string): Record<string, string> {
+  return {
+    businessName,
+    customerName: booking.customerName || '',
+    date: format(new Date(booking.startTime), 'MMM d'),
+    time: format(new Date(booking.startTime), 'h:mm a'),
+    partySize: String(booking.partySize || 1),
+    confirmationCode: booking.confirmationCode || '',
+    serviceName: booking.service?.name || '',
+    notes: booking.specialRequests || booking.notes || ''
+  };
+}
+
+/**
+ * Build variables for order confirmation SMS
+ */
+function buildOrderVariables(order: any, businessName: string): Record<string, string> {
+  return {
+    businessName,
+    customerName: order.customerName || '',
+    orderNumber: order.orderNumber || '',
+    orderType: order.type?.toLowerCase() || 'pickup',
+    total: order.total?.toFixed(2) || '0.00',
+    estimatedTime: order.estimatedReady ? format(new Date(order.estimatedReady), 'h:mm a') : '',
+    itemCount: String(order.items?.length || 0)
+  };
+}
 
 // ============================================
 // NOTIFICATION FUNCTIONS
@@ -272,6 +335,146 @@ function getSMSContent(type: NotificationType, data: any, businessName: string):
 }
 
 // ============================================
+// WHATSAPP NOTIFICATIONS
+// ============================================
+
+/**
+ * Check if a WhatsApp session is within the 24-hour window
+ * After 24 hours, only template messages can be sent
+ */
+function isWhatsAppSessionActive(sessionStart: string | null | undefined): boolean {
+  if (!sessionStart) return false;
+  const sessionDate = new Date(sessionStart);
+  const now = new Date();
+  const hoursDiff = (now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60);
+  return hoursDiff < 24;
+}
+
+/**
+ * Send a WhatsApp message via Twilio
+ * @param to - Customer phone number (will be prefixed with whatsapp:)
+ * @param body - Message content
+ * @param businessId - Business ID for fetching WhatsApp number
+ * @param conversationId - Optional conversation ID for session tracking
+ * @returns Success status and message SID
+ */
+export async function sendWhatsAppMessage(
+  to: string,
+  body: string,
+  businessId: string,
+  conversationId?: string
+): Promise<{ success: boolean; messageSid?: string; error?: string }> {
+  if (!twilioClient) {
+    console.log('Twilio not configured, skipping WhatsApp');
+    return { success: false, error: 'Twilio not configured' };
+  }
+
+  try {
+    // Get business WhatsApp number
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { whatsappPhoneNumber: true, whatsappEnabled: true, name: true }
+    });
+
+    if (!business?.whatsappEnabled || !business?.whatsappPhoneNumber) {
+      return { success: false, error: 'WhatsApp not enabled for this business' };
+    }
+
+    // Check if we're within the 24-hour session window (if conversation provided)
+    if (conversationId) {
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { metadata: true }
+      });
+
+      const metadata = conversation?.metadata as any;
+      const sessionStart = metadata?.whatsappSessionStart;
+
+      if (!isWhatsAppSessionActive(sessionStart)) {
+        console.log('WhatsApp session expired, would need template message');
+        // In a full implementation, you would use a template message here
+        // For now, we'll still attempt to send (Twilio will reject if needed)
+      }
+    }
+
+    // Normalize phone numbers and add whatsapp: prefix
+    const fromNumber = business.whatsappPhoneNumber.startsWith('whatsapp:')
+      ? business.whatsappPhoneNumber
+      : `whatsapp:${business.whatsappPhoneNumber}`;
+
+    const toNumber = to.startsWith('whatsapp:')
+      ? to
+      : `whatsapp:${to.replace(/[^\d+]/g, '')}`;
+
+    // WhatsApp has a 1600 character limit
+    let truncatedBody = body;
+    if (truncatedBody.length > 1500) {
+      truncatedBody = truncatedBody.substring(0, 1497) + '...';
+    }
+
+    // Convert markdown formatting for WhatsApp
+    truncatedBody = truncatedBody
+      .replace(/\*\*([^*]+)\*\*/g, '*$1*');  // Convert **bold** to *bold*
+
+    const message = await twilioClient.messages.create({
+      body: truncatedBody,
+      from: fromNumber,
+      to: toNumber
+    });
+
+    console.log(`WhatsApp message sent to ${to}, SID: ${message.sid}`);
+    return { success: true, messageSid: message.sid };
+  } catch (error: any) {
+    console.error('Failed to send WhatsApp message:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Send a booking confirmation via WhatsApp
+ */
+export async function sendWhatsAppBookingConfirmation(booking: any) {
+  if (!booking.customerPhone) return;
+
+  const business = await prisma.business.findUnique({
+    where: { id: booking.businessId },
+    select: { name: true, whatsappPhoneNumber: true, whatsappEnabled: true }
+  });
+
+  if (!business?.whatsappEnabled || !business?.whatsappPhoneNumber) return;
+
+  const message = `Booking confirmed at ${business.name}!\n\n` +
+    `*Date:* ${format(new Date(booking.startTime), 'EEEE, MMMM d, yyyy')}\n` +
+    `*Time:* ${format(new Date(booking.startTime), 'h:mm a')}\n` +
+    `*Party Size:* ${booking.partySize}\n` +
+    `*Confirmation Code:* ${booking.confirmationCode}\n\n` +
+    `We look forward to seeing you!`;
+
+  await sendWhatsAppMessage(booking.customerPhone, message, booking.businessId);
+}
+
+/**
+ * Send an order confirmation via WhatsApp
+ */
+export async function sendWhatsAppOrderConfirmation(order: any) {
+  if (!order.customerPhone) return;
+
+  const business = await prisma.business.findUnique({
+    where: { id: order.businessId },
+    select: { name: true, whatsappPhoneNumber: true, whatsappEnabled: true }
+  });
+
+  if (!business?.whatsappEnabled || !business?.whatsappPhoneNumber) return;
+
+  const message = `Order #${order.orderNumber} confirmed at ${business.name}!\n\n` +
+    `*Type:* ${order.type}\n` +
+    `*Total:* $${order.total.toFixed(2)}\n\n` +
+    `Your order will be ready soon. Thank you!`;
+
+  await sendWhatsAppMessage(order.customerPhone, message, order.businessId);
+}
+
+// ============================================
 // WEBHOOK NOTIFICATIONS
 // ============================================
 
@@ -350,8 +553,13 @@ export async function sendBookingConfirmation(booking: any) {
     const fromNumber = business?.twilioPhoneNumber || TWILIO_PHONE;
     if (fromNumber) {
       try {
+        // Get template and build message
+        const template = await getSmsTemplate(booking.businessId, 'BOOKING_CONFIRMATION');
+        const variables = buildBookingVariables(booking, business?.name || 'Your Business');
+        const smsBody = interpolateTemplate(template, variables);
+
         await twilioClient.messages.create({
-          body: `✓ Booking confirmed at ${business?.name}! ${format(new Date(booking.startTime), 'MMM d')} at ${format(new Date(booking.startTime), 'h:mm a')} for ${booking.partySize}. Code: ${booking.confirmationCode}`,
+          body: smsBody,
           from: fromNumber,
           to: booking.customerPhone
         });
@@ -376,8 +584,13 @@ export async function sendOrderConfirmation(order: any) {
   if (!fromNumber) return;
 
   try {
+    // Get template and build message
+    const template = await getSmsTemplate(order.businessId, 'ORDER_CONFIRMATION');
+    const variables = buildOrderVariables(order, business?.name || 'Your Business');
+    const smsBody = interpolateTemplate(template, variables);
+
     await twilioClient.messages.create({
-      body: `✓ Order #${order.orderNumber} confirmed at ${business?.name}! Your ${order.type.toLowerCase()} order will be ready soon. Total: $${order.total.toFixed(2)}`,
+      body: smsBody,
       from: fromNumber,
       to: order.customerPhone
     });
@@ -467,8 +680,13 @@ export async function sendBookingReminder(booking: any) {
   if (!fromNumber) return;
 
   try {
+    // Get template and build message
+    const template = await getSmsTemplate(booking.businessId, 'BOOKING_REMINDER');
+    const variables = buildBookingVariables(booking, business?.name || 'Your Business');
+    const smsBody = interpolateTemplate(template, variables);
+
     await twilioClient.messages.create({
-      body: `Reminder: You have a reservation at ${business?.name} tomorrow at ${format(new Date(booking.startTime), 'h:mm a')} for ${booking.partySize}. See you then!`,
+      body: smsBody,
       from: fromNumber,
       to: booking.customerPhone
     });

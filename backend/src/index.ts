@@ -22,6 +22,8 @@ import { adminRouter } from './routes/admin';
 import { billingRouter } from './routes/billing';
 import { contactRouter } from './routes/contact';
 import { newsletterRouter } from './routes/newsletter';
+import { webhooksConfigRouter } from './routes/webhooks-config';
+import { templatesRouter } from './routes/templates';
 import { errorHandler } from './middleware/errorHandler';
 import { setupSocketHandlers } from './services/socket';
 
@@ -106,9 +108,18 @@ app.use('/api/admin', adminRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/newsletter', newsletterRouter);
+app.use('/api/webhooks-config', webhooksConfigRouter);
+app.use('/api/businesses', templatesRouter);
 
 // Widget API (public, with API key auth)
 app.use('/widget', widgetLimiter, widgetRouter);
+
+// Static files for widget uploads
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 // Webhooks (Stripe, Twilio, etc.)
 app.use('/webhooks', webhookRouter);

@@ -5,6 +5,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { PrismaClient, Business, Conversation, Message } from '@prisma/client';
 import { format, parseISO, isWithinInterval, addMinutes } from 'date-fns';
 import { sendNotification } from './notifications';
+import { triggerWebhooks } from './webhookService';
 
 const prisma = new PrismaClient();
 const anthropic = new Anthropic();
@@ -510,6 +511,20 @@ IMPORTANT GUIDELINES:
       }
     });
 
+    // Trigger webhook for new booking
+    triggerWebhooks(this.businessId, 'booking.created', {
+      id: booking.id,
+      confirmationCode: booking.confirmationCode,
+      customerName,
+      customerPhone,
+      customerEmail,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      partySize,
+      status: 'CONFIRMED',
+      conversationId: this.conversationId
+    });
+
     return {
       success: true,
       confirmationCode: booking.confirmationCode,
@@ -605,7 +620,17 @@ IMPORTANT GUIDELINES:
     // Generate order number
     const orderNumber = `ORD${Date.now().toString(36).toUpperCase()}`;
 
-    // Create order
+    // Create order with items
+    const orderItems = this.currentOrder.map(item => ({
+      menuItemId: item.menuItemId,
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      totalPrice: item.totalPrice,
+      modifiers: item.modifiers,
+      notes: item.notes
+    }));
+
     const order = await prisma.order.create({
       data: {
         businessId: this.businessId,
@@ -622,17 +647,24 @@ IMPORTANT GUIDELINES:
         deliveryAddress: deliveryAddress || null,
         notes: notes || null,
         items: {
-          create: this.currentOrder.map(item => ({
-            menuItemId: item.menuItemId,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.totalPrice,
-            modifiers: item.modifiers,
-            notes: item.notes
-          }))
+          create: orderItems
         }
       }
+    });
+
+    // Trigger webhook for new order
+    triggerWebhooks(this.businessId, 'order.created', {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customerName,
+      customerPhone,
+      type: order.type,
+      status: 'CONFIRMED',
+      subtotal,
+      tax,
+      total,
+      items: orderItems,
+      conversationId: this.conversationId
     });
 
     // Clear current order
@@ -642,7 +674,7 @@ IMPORTANT GUIDELINES:
       success: true,
       orderNumber: order.orderNumber,
       orderType: order.type,
-      items: this.currentOrder,
+      items: orderItems,
       subtotal: subtotal.toFixed(2),
       tax: tax.toFixed(2),
       total: total.toFixed(2),
@@ -705,6 +737,17 @@ IMPORTANT GUIDELINES:
         handoffReason: input.reason,
         status: 'HANDED_OFF'
       }
+    });
+
+    // Trigger webhook for handoff
+    triggerWebhooks(this.businessId, 'conversation.handoff', {
+      conversationId: this.conversationId,
+      reason: input.reason,
+      customerName: conversation.customerName,
+      customerPhone: conversation.customerPhone,
+      customerEmail: conversation.customerEmail,
+      channel: conversation.channel,
+      startedAt: conversation.startedAt
     });
 
     // Send notification to business owner

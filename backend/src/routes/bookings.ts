@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authMiddleware } from '../middleware/auth';
 import { format } from 'date-fns';
+import { triggerWebhooks } from '../services/webhookService';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -89,8 +90,18 @@ router.patch('/:businessId/:id', async (req, res) => {
 
     const booking = await prisma.booking.update({
       where: { id },
-      data: updateData
+      data: updateData,
+      include: { service: true, location: true }
     });
+
+    // Trigger webhooks based on status change
+    if (status === 'CONFIRMED') {
+      triggerWebhooks(businessId, 'booking.confirmed', booking);
+    } else if (status === 'CANCELLED') {
+      triggerWebhooks(businessId, 'booking.cancelled', booking);
+    } else {
+      triggerWebhooks(businessId, 'booking.updated', booking);
+    }
 
     res.json(booking);
   } catch (error) {
@@ -121,8 +132,12 @@ router.post('/:businessId', async (req, res) => {
         confirmationCode,
         status: 'CONFIRMED',
         confirmedAt: new Date()
-      }
+      },
+      include: { service: true, location: true }
     });
+
+    // Trigger webhook for new booking
+    triggerWebhooks(businessId, 'booking.created', booking);
 
     res.status(201).json(booking);
   } catch (error) {
