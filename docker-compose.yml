@@ -82,6 +82,19 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:-handled.dev.ecoworks.ca}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.api.loadbalancer.server.port=3103"
+      # WebSocket support
+      - "traefik.http.routers.api-ws.rule=Host(`api.${DOMAIN:-handled.dev.ecoworks.ca}`) && PathPrefix(`/socket.io`)"
+      - "traefik.http.routers.api-ws.entrypoints=websecure"
+      - "traefik.http.routers.api-ws.tls=true"
+      - "traefik.http.middlewares.api-ws.headers.customrequestheaders.Connection=Upgrade"
+      - "traefik.http.middlewares.api-ws.headers.customrequestheaders.Upgrade=websocket"
 
   # ==============================================
   # FRONTEND DASHBOARD
@@ -91,13 +104,20 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${API_URL:-https://dev.ecoworks.ca:3103}
+        VITE_API_URL: ${API_URL:-https://api.handled.dev.ecoworks.ca}
     container_name: handled-dashboard
     restart: unless-stopped
     ports:
       - "3003:80"  # Slot 03 - Dashboard Frontend
     depends_on:
       - api
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${DOMAIN:-handled.dev.ecoworks.ca}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=80"
 
   # ==============================================
   # LANDING PAGE
@@ -110,25 +130,63 @@ services:
     restart: unless-stopped
     ports:
       - "3002:80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.landing.rule=Host(`www.${DOMAIN:-handled.dev.ecoworks.ca}`) || Host(`landing.${DOMAIN:-handled.dev.ecoworks.ca}`)"
+      - "traefik.http.routers.landing.entrypoints=websecure"
+      - "traefik.http.routers.landing.tls=true"
+      - "traefik.http.routers.landing.tls.certresolver=letsencrypt"
+      - "traefik.http.services.landing.loadbalancer.server.port=80"
 
   # ==============================================
-  # NGINX REVERSE PROXY (Production)
+  # TRAEFIK REVERSE PROXY
   # ==============================================
-  nginx:
-    image: nginx:alpine
-    container_name: handled-nginx
+  traefik:
+    image: traefik:v3.0
+    container_name: handled-traefik
     restart: unless-stopped
+    command:
+      # API and Dashboard
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+      # Providers
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=handled-network"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # HTTP to HTTPS redirect
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # Let's Encrypt (production)
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@handled.ai}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # Logging
+      - "--log.level=INFO"
+      - "--accesslog=true"
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./widget/dist:/var/www/widget:ro
-    depends_on:
-      - api
-      - dashboard
-      - landing
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/certs:/etc/traefik/certs:ro
+    labels:
+      # Dashboard
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN:-dev.ecoworks.ca}`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.tls=true"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.middlewares=traefik-auth"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH:-admin:$$apr1$$H6uskkkW$$IgXLP6ewTrSuBkTrqE8wj/}"
+    networks:
+      - default
     profiles:
       - production
 
@@ -163,7 +221,7 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-handled123}
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://dev.ecoworks.ca:3303}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://grafana.handled.dev.ecoworks.ca}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -172,6 +230,13 @@ services:
       - "3303:3000"  # Slot 03 - Grafana
     depends_on:
       - prometheus
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN:-handled.dev.ecoworks.ca}`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
     profiles:
       - monitoring
 
@@ -192,6 +257,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  traefik_letsencrypt:
 
 networks:
   default:

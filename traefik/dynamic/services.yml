@@ -1,0 +1,25 @@
+# Traefik Dynamic Configuration - External Services
+# Define services for external endpoints or load balancing
+
+http:
+  services:
+    # Widget CDN service (for serving widget.js)
+    widget-cdn:
+      loadBalancer:
+        servers:
+          - url: "http://handled-api:3103"
+        healthCheck:
+          path: /health
+          interval: 30s
+          timeout: 5s
+
+  routers:
+    # Widget JS route
+    widget-js:
+      rule: "Host(`widget.handled.dev.ecoworks.ca`) || (Host(`api.handled.dev.ecoworks.ca`) && PathPrefix(`/widget`))"
+      entryPoints:
+        - websecure
+      service: widget-cdn
+      tls: {}
+      middlewares:
+        - cors-api

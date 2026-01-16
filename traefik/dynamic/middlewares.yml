@@ -1,0 +1,61 @@
+# Traefik Dynamic Configuration - Middlewares
+http:
+  middlewares:
+    # Security headers
+    secure-headers:
+      headers:
+        frameDeny: true
+        sslRedirect: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customResponseHeaders:
+          X-Robots-Tag: "noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex"
+
+    # Rate limiting
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1s
+
+    # Compression
+    compress:
+      compress: {}
+
+    # CORS for API
+    cors-api:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-API-Key
+          - X-Requested-With
+        accessControlAllowOriginList:
+          - https://handled.dev.ecoworks.ca
+          - https://dev.ecoworks.ca:3003
+          - http://localhost:3003
+        accessControlMaxAge: 100
+        addVaryHeader: true
+
+    # Strip path prefix (for subpath routing)
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - /api
+
+    # Redirect www to non-www
+    www-redirect:
+      redirectRegex:
+        regex: "^https://www\\.(.*)"
+        replacement: "https://${1}"
+        permanent: true

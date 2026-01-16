@@ -1,0 +1,30 @@
+# Handled - Docker Compose Development Override
+# Run with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  # Override Traefik for development (no production profile needed)
+  traefik:
+    profiles: []  # Remove production profile for dev
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=handled-network"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--log.level=DEBUG"
+      - "--accesslog=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+
+  # Enable monitoring in dev without profile
+  prometheus:
+    profiles: []
+
+  grafana:
+    profiles: []
